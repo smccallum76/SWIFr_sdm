@@ -66,7 +66,7 @@ class AODE_train():
 			scores = pickle.load(open(self.path2AODE+stat1+'_'+stat2+'_'+scenario+'_tuples.p','rb'))
 
 		else:
-			print 'learning '+scenario+' joint distributions for '+stat1+' and '+stat2+'...'
+			print('learning '+scenario+' joint distributions for '+stat1+' and '+stat2+'...')
 			scores = []
 
 			for filename in os.listdir(self.path2allstats+scenario+'/'):
@@ -91,7 +91,7 @@ class AODE_train():
 		if round1 == False:
 			scores = pickle.load(open(self.path2AODE+stat+'_'+scenario+'_singles.p','rb'))
 		else:
-			print 'learning '+scenario+' marginal distributions for '+stat+'...'
+			print('learning '+scenario+' marginal distributions for '+stat+'...')
 			scores = []
 			for filename in os.listdir(self.path2allstats+scenario+'/'):
 				if filename[0] != '.':
@@ -126,7 +126,7 @@ class AODE_train():
 			BICs_full.append(H.bic(S))
 		minbic = min(BICs_full)
 		argminbic = BICs_full.index(minbic)+1
-		print 'number of components for '+scenario+': '+str(argminbic)
+		print('number of components for '+scenario+': '+str(argminbic))
 		plt.plot(range(1,11),BICs_full,'o-',color='darkblue',ms=5,markeredgecolor='none')
 		plt.plot(argminbic,minbic,'o-',color='coral',ms=5,markeredgecolor='red')
 		plt.xlabel('number of Gaussian mixture components')
@@ -147,7 +147,7 @@ class AODE_train():
 
 		minbic = min(BICs)
 		argminbic = BICs.index(minbic)+1
-		print 'number of components for '+scenario+': '+str(argminbic)			
+		print('number of components for '+scenario+': '+str(argminbic))
 		plt.xlabel('number of Gaussian mixture components')
 		plt.ylabel('BIC')
 		plt.plot(range(1,11),BICs,'o-',color='darkblue',ms=5,markeredgecolor='none')
@@ -168,13 +168,13 @@ class AODE_train():
 
 	def run_bic(self):
 		for stat in self.statlist:
-			print 'learning number of Gaussian mixture components for '+stat
+			print('learning number of Gaussian mixture components for '+stat)
 			for scenario in self.scenarios:
 				self.plot_bic_1D(stat,scenario)
 
 		for i in range(len(self.statlist)-1):
 			for j in range(i+1,len(self.statlist)):
-				print 'learning number of Gaussian mixture components for joint '+self.statlist[i]+', '+self.statlist[j]
+				print('learning number of Gaussian mixture components for joint '+self.statlist[i]+', '+self.statlist[j])
 				for scenario in self.scenarios:
 					self.plot_bic(self.statlist[i],self.statlist[j],scenario)
 
@@ -331,9 +331,9 @@ if __name__ == '__main__':
 
 	if args.retrain:
 		A.retrain_classifier()
-		print 'Training complete. Run SWIFr.py with --path2trained '+args.path2files
+		print('Training complete. Run SWIFr.py with --path2trained '+args.path2files)
 	else:
 		A.run_bic()
 		A.plot_contours()
-		print 'Training complete. Run SWIFr.py with --path2trained '+args.path2files
+		print('Training complete. Run SWIFr.py with --path2trained '+args.path2files)
 
