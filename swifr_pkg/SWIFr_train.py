@@ -10,11 +10,13 @@ matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 import numpy as np
 from sklearn import mixture
-from matplotlib.mlab import bivariate_normal
-from matplotlib.mlab import normpdf
+#from matplotlib.mlab import bivariate_normal # looks like this was dropped after matplotlib 3.1
+#from matplotlib.mlab import normpdf # also dropped
 import matplotlib.cm as cm
 import warnings
 import matplotlib.cbook
+#sdm imports
+from scipy.stats import multivariate_normal
 
 class AODE_train(object):
     '''
@@ -46,7 +48,7 @@ class AODE_train(object):
         file = open(self.path2files+'classes.txt','r')
         f = file.read()
         file.close()
-        self.scenarios = [x.strip() for x in f.strip().splitlines()]
+        self.scenarios = [x.strip() for x in f.strip().splitlines()] # neutral and sweep for 2d example
 
 
         file = open(self.path2files+'component_stats.txt','r')
@@ -250,7 +252,11 @@ class AODE_train(object):
             x = np.linspace(minscore,maxscore,100)
             Z = 0
             for i in range(len(w)):
-                Z = Z + w[i]*normpdf(x,mu[i],sigma[i])
+                # normpdf deprecated, original matplotlib code below [sdm]
+                #Z = Z + w[i]*normpdf(x,mu[i],sigma[i])
+                # orig code --> 1. / (np.sqrt(2 * np.pi) * sigma) * np.exp(-0.5 * (1. / sigma * (x - mu)) ** 2)
+                Z = Z + w[i] * (1. / (np.sqrt(2 * np.pi) * sigma[i]) * np.exp(-0.5 * (1. / sigma[i] * (x - mu[i])) ** 2))
+
             plt.plot(x,Z[0],self.colors[self.scenarios.index(scenario)%len(self.colors)])
         plt.xlabel(stat)
         plt.ylabel('frequency')
@@ -277,8 +283,31 @@ class AODE_train(object):
             X,Y = np.meshgrid(x,y)
             Z = 0
             for i in range(len(w)):
-                Z = Z + w[i]*bivariate_normal(X,Y,mux=mu[i][0],muy=mu[i][1],sigmax=math.sqrt(sigma[i][0][0]),sigmay=math.sqrt(sigma[i][1][1]),sigmaxy=sigma[i][0][1])
-            C = plt.contour(X,Y,Z,10,cmap=self.colorspectra[self.scenarios.index(scenario)%len(self.colorspectra)])
+                # bivariate_normal has been deprecated by matplotlib
+                #Z = Z + w[i]*bivariate_normal(X,Y,mux=mu[i][0],muy=mu[i][1],sigmax=math.sqrt(sigma[i][0][0]),sigmay=math.sqrt(sigma[i][1][1]),sigmaxy=sigma[i][0][1])
+
+                # deprecated matplotlib code, will retain until confirm that scipy code works correctly
+                # https://github.com/matplotlib/matplotlib/blob/81e8154dbba54ac1607b21b22984cabf7a6598fa/lib/matplotlib/mlab.py#L1866
+                mux = mu[i][0]
+                muy = mu[i][1]
+                sigmax = math.sqrt(sigma[i][0][0])
+                sigmay = math.sqrt(sigma[i][1][1])
+                sigmaxy = sigma[i][0][1]
+
+                Xmu = X - mux
+                Ymu = Y - muy
+
+                rho = sigmaxy / (sigmax * sigmay)
+                z = Xmu ** 2 / sigmax ** 2 + Ymu ** 2 / sigmay ** 2 - 2 * rho * Xmu * Ymu / (sigmax * sigmay)
+                denom = 2 * np.pi * sigmax * sigmay * np.sqrt(1 - rho ** 2)
+                Z = Z + w[i] * np.exp(-z / (2 * (1 - rho ** 2))) / denom
+
+                # multivariate normal format(mean=[vector of means], cov=[[x,xy], [xy,y]])
+                # stackoverflow==> https://stackoverflow.com/questions/63623170/an-equivalent-function-to-matplotlib-mlab-bivariate-normal
+                #rv = multivariate_normal(mean=[mu[i][0], mu[i][1]], cov=[[math.sqrt(sigma[i][0][0]), sigma[i][0][1]], [sigma[i][0][1], math.sqrt(sigma[i][1][1])]])
+                #Z = Z + rv.pdf(np.stack((X, Y))) * w[i]
+
+            C = plt.contour(X, Y, Z, 10, cmap=self.colorspectra[self.scenarios.index(scenario) % len(self.colorspectra)])
 
         plt.xlabel(stat1)
         plt.ylabel(stat2)
@@ -320,17 +349,21 @@ class AODE_train(object):
 
         self.plot_contours()
 
-#if __name__ == '__main__':
-def main():
+if __name__ == '__main__':
+#def main():
     
     #suppress matplotlib deprecation warnings
     warnings.filterwarnings("ignore", category=matplotlib.cbook.mplDeprecation)
-
+    # argparse is a parser for command line options
     parser = argparse.ArgumentParser()
+    # parse the arguments provided by the user
     parser.add_argument('--path',action='store',dest='path2files',default='') #path to all input files (simulations in a 'simulations' directory, and compstats, scenarios files)
     parser.add_argument('--retrain',action='store_true',dest='retrain')
-
+    # put the arguments
     args = parser.parse_args()
+    args.path2files = 'test_data/example_2classes/' # added this for debugging only
+    print(args.path2files)
+
     A = AODE_train(args)
 
     if args.retrain:
