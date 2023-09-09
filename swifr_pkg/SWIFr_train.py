@@ -105,6 +105,10 @@ class AODE_train(object):
         return np.array(scores)
 
     def singles(self,stat,scenario,round1=False):
+        '''
+        Method to import the simulations data that includes the SNP, distance, and various statistics for both neutral
+        and sweep classes.
+        '''
         if round1 == False:
             scores = pickle.load(open(self.path2AODE+stat+'_'+scenario+'_singles.p','rb'))
         else:
@@ -125,10 +129,13 @@ class AODE_train(object):
                             scores.append([score])
                         
             pickle.dump(scores,open(self.path2AODE+stat+'_'+scenario+'_singles.p','wb'), protocol=2)
+        # SCORES contains the stat scores for Fst, then XP-EHH, then iHS, then DDAF
         SCORES = np.array(scores)
+        # the min and max from SCORES
         minscore = min(SCORES)[0]
         maxscore = max(SCORES)[0]
         #RANGE = maxscore-minscore
+        # assign the min and max from SCORES to the self.minscores and self.maxscores lists of lists
         self.minscores[self.stat2num[stat]].append(minscore)
         self.maxscores[self.stat2num[stat]].append(maxscore)
         return np.array(scores)
@@ -156,10 +163,14 @@ class AODE_train(object):
     def plot_bic_1D(self,stat,scenario):
         S = self.singles(stat,scenario)
         BICs = []
+        # the bic is being calculated for 1 to 11 components
         for n in range(1,11):
+            # call sklearn gaussian mixture model
             H = mixture.GaussianMixture(n_components=n)
+            # fit the mixture model based on the column(s) of data provided
             H.fit(S)
             #AICs.append(H.aic(S))
+            # return the bic scores from the sklearn gaussian mixture model
             BICs.append(H.bic(S))
 
         minbic = min(BICs)
@@ -361,8 +372,7 @@ if __name__ == '__main__':
     parser.add_argument('--retrain',action='store_true',dest='retrain')
     # put the arguments
     args = parser.parse_args()
-    args.path2files = 'test_data/example_2classes/' # added this for debugging only
-    print(args.path2files)
+    args.path2files = 'test_data/example_2classes/' # added for debugging only
 
     A = AODE_train(args)
 
