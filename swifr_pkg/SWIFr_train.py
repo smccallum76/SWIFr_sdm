@@ -360,19 +360,20 @@ class AODE_train(object):
 
         self.plot_contours()
 
-if __name__ == '__main__':
-#def main():
+if __name__ == '__main__': # added for debugging reasons.
+#def main(): # removed for debugging reasons
     
     #suppress matplotlib deprecation warnings
     warnings.filterwarnings("ignore", category=matplotlib.cbook.mplDeprecation)
     # argparse is a parser for command line options
     parser = argparse.ArgumentParser()
     # parse the arguments provided by the user
-    parser.add_argument('--path',action='store',dest='path2files',default='') #path to all input files (simulations in a 'simulations' directory, and compstats, scenarios files)
+    #parser.add_argument('--path',action='store',dest='path2files',default='') #path to all input files (simulations in a 'simulations' directory, and compstats, scenarios files)
+    parser.add_argument('--path',action='store',dest='path2files',default='test_data/example_2classes/') # added for debugging reasons, the line commented above is the original
     parser.add_argument('--retrain',action='store_true',dest='retrain')
     # put the arguments
     args = parser.parse_args()
-    args.path2files = 'test_data/example_2classes/' # added for debugging only
+    #args.path2files = 'test_data/example_2classes/' # added for debugging only
 
     A = AODE_train(args)
 
