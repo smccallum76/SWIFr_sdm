@@ -3,7 +3,7 @@ from __future__ import division
 from builtins import str
 from builtins import input
 from builtins import range
-from past.utils import old_div
+#from past.utils import old_div
 from builtins import object
 #from SWIFr_train import AODE_train
 from sklearn import mixture
@@ -85,14 +85,15 @@ class AODE(object):
     
     def aode(self,stats,pi):
         #pi must have length len(scenarios)
-        numerators = [[] for i in range(len(self.scenarios))]
-        raw_nums = [[] for i in range(len(self.scenarios))]
-        denominators = []
+        numerators = [[] for i in range(len(self.scenarios))]  # if two scenarios then two numerators
+        raw_nums = [[] for i in range(len(self.scenarios))]  # if two scenarios then two rw nums
+        denominators = []  # only one denominator b/c it is just going to be the sum of everything
         ode_num_dicts = {}
         for i in range(len(self.scenarios)):
             ode_num_dicts[self.scenarios[i]]=dict()
-        for keystat in self.statlist:
-            ps,nums,denom,raw = self.ode(keystat,stats,pi)
+        for keystat in self.statlist: # walks through each stat in the statlist, where keystat is the active stat in the loop
+            # send (say) Fst (keystat), all the stats (Fst, XP-EHH...), and the pi vector [0.99999, 1e-5]
+            ps,nums,denom,raw = self.ode(keystat,stats,pi) # break point 1
             for i in range(len(self.scenarios)):
                 if ps != 'n/a':
                     ode_num_dicts[self.scenarios[i]][keystat]=nums[i]
@@ -109,29 +110,34 @@ class AODE(object):
             return [0 for i in range(len(self.scenarios))], aoderaw, ode_num_dicts
 
     def ode(self,keystat,stats,pi):
-        score = stats.stat2score[keystat]
+        score = stats.stat2score[keystat] # this is the raw score from the input file on a given line
         if score == -998:
             return 'n/a',0,0,0
         else:
+            # will hold the marginal GaussianMixture component counts for neutral and sweep
             MARGS = self.MARGINALS[self.stat2num[keystat]]
             Likelihoods = []
             for i in range(len(self.scenarios)):
                 M = MARGS[i]
                 Likelihoods.append(self.GMM_pdf(M,score))
 
-            for stat in self.statlist:
+            for stat in self.statlist: # break point 2
                 if stat != keystat:
                     score2 = stats.stat2score[stat]
                     if score2 != -998:
                         if self.stat2num[keystat] < self.stat2num[stat]:
                             for i in range(len(self.scenarios)):
+                                # The following is being sent to conditional_GMM
+                                # 1. The Fst stat to be evaluated (or whatever stat we're on)
+                                # 2. The second stat that is being considered (DDAF in this case)
+                                # 3. The Joint GMM parameters for (say) FST and DDAF in neutral and then sweep
                                 H = self.conditional_GMM(score,2,self.JOINTS[self.stat2num[keystat]][self.stat2num[stat]][i])
                                 Likelihoods[i] = Likelihoods[i]*self.GMM_pdf(H,score2)
                         else:
                             for i in range(len(self.scenarios)):
                                 H = self.conditional_GMM(score,1,self.JOINTS[self.stat2num[stat]][self.stat2num[keystat]][i])
                                 Likelihoods[i] = Likelihoods[i]*self.GMM_pdf(H,score2)
-            numerators = [0 for i in range(len(self.scenarios))]
+            numerators = [0 for i in range(len(self.scenarios))] # break point 5
             for i in range(len(self.scenarios)):
                 numerators[i] = float(pi[i]*Likelihoods[i])
             even_raw_aode = [0 for i in range(len(self.scenarios))]
@@ -158,11 +164,15 @@ class AODE(object):
 
     def normpdf(self,x,mu,sigma):
         u = float(x-mu)/sigma
-        y = (old_div(1,(math.sqrt(2*math.pi)*abs(sigma))))*math.exp(old_div(-u*u,2))
+        # sdm commented out the line below and added the line two lines below. The removed the old_div call
+        #y = (old_div(1,(math.sqrt(2*math.pi)*abs(sigma))))*math.exp(old_div(-u*u,2))
+        y = (1 / (math.sqrt(2 * math.pi) * abs(sigma))) * math.exp((-u * u) / 2)
+        #matplotlib oneliner for normpdf: 1. / (np.sqrt(2 * np.pi) * sigma) * np.exp(-0.5 * (1. / sigma * (x - mu)) ** 2)
+        y2 = 1. / (np.sqrt(2 * np.pi) * sigma) * np.exp(-0.5 * (1. / sigma * (x - mu)) ** 2)
         return y
 
     def calc_srs(self,raw_probs):
-        log_probs=[]
+        log_probs=[] # break point 6
         for i in raw_probs:
             if i>0:
                 log_probs.append(math.log10(i))
@@ -172,7 +182,7 @@ class AODE(object):
     
     def conditional_GMM(self,condval,keystat,G):
         #keystat = 1 if want stat1|stat2, keystat = 2 if want stat2|stat1
-        H = Mix1D()
+        H = Mix1D() # Break point 4
 
         for i in range(len(G.weights_)):
             sigma1 = math.sqrt(G.covariances_[i][0][0])
@@ -232,8 +242,9 @@ class AODE(object):
         for line in f:
             L = line.strip().split('\t')
             S = Stats(self.path2trained)
-            for stat in S.stats:
+            for stat in S.stats: # gets the stat scores from one line of the file and updates S with the values
                 S.stat2score[stat] = float(L[stat2index[stat]])
+            # send the line of stat values to A.aode with the priors (pivec)
             scenario_probs, raw_probs, odes = A.aode(S,pivec)
             outtext = line+'\t'
             for i in range(len(pivec)):
@@ -246,7 +257,7 @@ class AODE(object):
                     outtext += str(raw_probs[i])+'\t'
                     for stat in self.statlist:
                         outtext += str(odes[self.scenarios[i]][stat])+'\t'
-            if nb:
+            if nb: # break point 7
                 nb_scores, nums, denoms = A.naive_bayes(S,pivec)
                 for i in range(len(self.scenarios)):
                     outtext += str(nb_scores[i])+'\t'
@@ -278,18 +289,35 @@ class AODE(object):
 
 
 
-# if __name__ == '__main__':
-def main():
+if __name__ == '__main__': # added for debugging
+#def main(): # commented out for debugging
+    # The line from 284-292 are the original lines, I have modified these in 294-302
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument('--path2trained',action='store',dest='path2trained',default='')
+    # parser.add_argument('--interactive',action='store_true',dest='interactive',default=False)
+    # parser.add_argument('--file',action='store',dest='filename') #use instead of interactive mode to work on a whole file
+    # parser.add_argument('--pi',action='store',nargs='+',default=['0.99999','0.00001']) #can use with either mode
+    # parser.add_argument('--outfile',action='store',default='')
+    # parser.add_argument('--nb',action='store_true',dest='nb',default=False) #run naive bayes
+    # parser.add_argument('--ode',action='store_true',dest='ode',default=False) #output non-normalized AODE output and inidividual ODE scores
+    # args = parser.parse_args()
 
+    # sdm modified lines
     parser = argparse.ArgumentParser()
-    parser.add_argument('--path2trained',action='store',dest='path2trained',default='')
+    parser.add_argument('--path2trained',action='store',dest='path2trained',default='test_data/example_2classes/')
+    # interactive allows the user to enter a value for Fst, XP-EHH, iHS, and DDAF as a one-off test (like classifying
+    # one row of data).
     parser.add_argument('--interactive',action='store_true',dest='interactive',default=False)
-    parser.add_argument('--file',action='store',dest='filename') #use instead of interactive mode to work on a whole file
+    #use instead of interactive mode to work on a whole file, this is the file to be classified...new stuff. For example
+    # this could be the test_test_block_2classes in the application_example folder
+    parser.add_argument('--file',action='store',dest='filename')
     parser.add_argument('--pi',action='store',nargs='+',default=['0.99999','0.00001']) #can use with either mode
-    parser.add_argument('--outfile',action='store',default='')
-    parser.add_argument('--nb',action='store_true',dest='nb',default=False) #run naive bayes
-    parser.add_argument('--ode',action='store_true',dest='ode',default=False) #output non-normalized AODE output and inidividual ODE scores
+    parser.add_argument('--outfile',action='store',default='') # this is where the new file will be stored
+    parser.add_argument('--nb',action='store_true',dest='nb',default=True) #run naive bayes (default is false)
+    parser.add_argument('--ode',action='store_true',dest='ode',default=True) #output non-normalized AODE output and inidividual ODE scores (default is false)
     args = parser.parse_args()
+
+    args.filename = 'application_example/sdm_test_block_2classes' # added for debugging only (sdm.. has only one row of data)
      
     if not args.interactive and not args.filename:
         print("Error: SWIF(r) must be run either with an input file using --file or in " \
