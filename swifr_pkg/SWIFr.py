@@ -317,7 +317,7 @@ if __name__ == '__main__': # added for debugging
     parser.add_argument('--ode',action='store_true',dest='ode',default=True) #output non-normalized AODE output and inidividual ODE scores (default is false)
     args = parser.parse_args()
 
-    args.filename = 'application_example/sdm_test_block_2classes' # added for debugging only (sdm.. has only one row of data)
+    args.filename = 'test_data/application_example/test_block_2classes' # added for debugging only (sdm.. has only one row of data)
      
     if not args.interactive and not args.filename:
         print("Error: SWIF(r) must be run either with an input file using --file or in " \
