@@ -177,7 +177,7 @@ class AODE(object):
             if i>0:
                 log_probs.append(math.log10(i))
             else:
-                log_probs.append(-inf)
+                log_probs.append(-(np.inf))
         return max(log_probs)
     
     def conditional_GMM(self,condval,keystat,G):
@@ -304,20 +304,20 @@ if __name__ == '__main__': # added for debugging
 
     # sdm modified lines
     parser = argparse.ArgumentParser()
-    parser.add_argument('--path2trained',action='store',dest='path2trained',default='test_data/example_2classes/')
+    parser.add_argument('--path2trained',action='store',dest='path2trained',default='test_data/simulations_4_swifr/')
     # interactive allows the user to enter a value for Fst, XP-EHH, iHS, and DDAF as a one-off test (like classifying
     # one row of data).
     parser.add_argument('--interactive',action='store_true',dest='interactive',default=False)
     #use instead of interactive mode to work on a whole file, this is the file to be classified...new stuff. For example
     # this could be the test_test_block_2classes in the application_example folder
     parser.add_argument('--file',action='store',dest='filename')
-    parser.add_argument('--pi',action='store',nargs='+',default=['0.99999','0.00001']) #can use with either mode
+    parser.add_argument('--pi',action='store',nargs='+',default=['0.99899', '0.00001', '0.001' ]) #can use with either mode
     parser.add_argument('--outfile',action='store',default='') # this is where the new file will be stored
     parser.add_argument('--nb',action='store_true',dest='nb',default=True) #run naive bayes (default is false)
     parser.add_argument('--ode',action='store_true',dest='ode',default=True) #output non-normalized AODE output and inidividual ODE scores (default is false)
     args = parser.parse_args()
 
-    args.filename = 'test_data/application_example/test_block_2classes' # added for debugging only (sdm.. has only one row of data)
+    args.filename = 'test_data/simulations_4_swifr_test/test/test' # location of data that is to be classified
      
     if not args.interactive and not args.filename:
         print("Error: SWIF(r) must be run either with an input file using --file or in " \
