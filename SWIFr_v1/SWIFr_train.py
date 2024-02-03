@@ -179,7 +179,7 @@ class AODE_train():
 					self.plot_bic(self.statlist[i],self.statlist[j],scenario)
 
 		#write marginal component_nums file
-		out = open(self.path2AODE+'marginal_component_nums','w')
+		out = open(self.path2AODE+'marginal_component_nums_edit','w')
 		header = 'statistic\t'
 		for scenario in self.scenarios:
 			header += scenario+'\t'
@@ -194,7 +194,7 @@ class AODE_train():
 		out.close()
 
 		#write joint component_nums file
-		out = open(self.path2AODE+'joint_component_nums','w')
+		out = open(self.path2AODE+'joint_component_nums_edit','w')
 		header = 'stat1\tstat1\t'
 		for scenario in self.scenarios:
 			header += scenario+'\t'
@@ -282,7 +282,7 @@ class AODE_train():
 			self.plot_gmm_marginals(stat)
 
 	def retrain_classifier(self):
-		file = open(self.path2AODE+'marginal_component_nums','r')
+		file = open(self.path2AODE+'marginal_component_nums_edit','r')
 		f = file.read()
 		file.close()
 		f = f.strip().splitlines()[1:]
@@ -293,7 +293,7 @@ class AODE_train():
 				for j in range(len(self.scenarios)):
 					self.component_nums_1D[self.stat2num[stat]][j] = int(f[i][j+1])
 
-		file = open(self.path2AODE+'joint_component_nums','r')
+		file = open(self.path2AODE+'joint_component_nums_edit','r')
 		f = file.read()
 		file.close()
 		f = f.strip().splitlines()[1:]
