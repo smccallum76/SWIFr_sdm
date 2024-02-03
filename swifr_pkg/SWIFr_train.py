@@ -370,7 +370,7 @@ if __name__ == '__main__': # added for debugging reasons.
     # parse the arguments provided by the user
     #parser.add_argument('--path',action='store',dest='path2files',default='') #path to all input files (simulations in a 'simulations' directory, and compstats, scenarios files)
     parser.add_argument('--path',action='store',dest='path2files',default='test_data/simulations_4_swifr/') # added for debugging reasons, the line commented above is the original
-    parser.add_argument('--retrain',action='store_true',dest='retrain')
+    parser.add_argument('--retrain',action='store_true',dest='retrain', default=False) # default should be False unless you want to retrain
     # put the arguments
     args = parser.parse_args()
     #args.path2files = 'test_data/example_2classes/' # added for debugging only
@@ -379,7 +379,7 @@ if __name__ == '__main__': # added for debugging reasons.
 
     if args.retrain:
         A.retrain_classifier()
-        print('Training complete. Run the command swifr_test with --path2trained '+args.path2files)
+        print('Re-Training complete. Run the command swifr_test with --path2trained '+args.path2files)
     else:
         A.run_bic()
         A.plot_contours()
