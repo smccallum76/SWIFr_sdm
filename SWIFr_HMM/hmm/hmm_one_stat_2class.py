@@ -215,7 +215,7 @@ def hmm_forward_new(gmm_params, data, A_trans, pi):
             log_alpha[c].append(log_alpha_max)
 
         """ Begin cycling through each sample and each class """
-        for t in range(1, n):  # cycle through all the samples
+        for t in range(1, n):  # cycle through all of the samples
             for ci in range(len(classes)):
                 """ determine max alpha for a given class """
                 m_alpha_temp = []
