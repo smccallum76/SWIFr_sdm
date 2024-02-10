@@ -81,76 +81,93 @@ def hmm_norm_pdf(x, mu, sd):
     """
     p = stats.norm.pdf(x=x,  loc=mu, scale=sd)
     return p
-# def hmm_forward(params, data, A_trans):
-#     # some initializations and settings
-#     n = len(data)
-#     A_new = A_trans
-#
-#     # this needs to be scrapped and replaced with the gmm data and init_df
-#     mu_n = params['mu'][params['state'] == 'neutral'].tolist()
-#     mu_p = params['mu'][params['state'] == 'sweep'].tolist()
-#     sd_n = params['sd'][params['state'] == 'neutral'].tolist()
-#     sd_p = params['sd'][params['state'] == 'sweep'].tolist()
-#     pi_n = params['pi'][params['state'] == 'neutral'].tolist()[0]
-#     pi_p = params['pi'][params['state'] == 'sweep'].tolist()[0]
-#
-#     # Probability density values for the data using distribution 1
-#     """
-#     [see sync notes 10/24/2023]
-#     I did make a mistake with the bx1 and bx2 calculation. What I should have done is calculate
-#     the pdf for each of the neutral humps (modes) and then multiply those pdf by the weight of each hump. This is not
-#     an urgent problem to fix b/c we will get these weights from the GMM anyway, but probably worth adding on my own.
-#     See day 12 notes from class, but the idea is below. basically if hump-1 has weight of 0.25 and hump-2 has weight
-#     0.75 then the pdf would be [wgt1 * pdf1 + wgt2 * pdf2]. This can be done using g.weights_
-#     """
-#     bx1_temp = hmm_norm_pdf(x=data, mu=mu_n[0], sd=sd_n[0])
-#     for i in range(1, len(mu_n)):
-#         bx1_temp = np.append(bx1_temp, hmm_norm_pdf(x=data, mu=mu_n[i], sd=sd_n[i]), axis=1)
-#     bx1 = np.max(bx1_temp, axis=1)
-#     # I think that once the weights are included, the np.max function will be replaced with np.sum
-#     # bx1 = np.sum(bx1_temp, axis=1)
-#     alpha1 = np.array(np.log(bx1[0] * pi_n)).reshape((1,))
-#     # bx1 = hmm_norm_pdf(x=data, mu=params.loc[0, 'mu'], sd=params.loc[0, 'sd'])  # old code for 2 distributions
-#     # alpha1 = np.array(np.log(bx1[0] * params.loc[0, 'pi']))  # old code for 2 distributions
-#
-#     # Probability density values for the data using distribution 2
-#     bx2_temp = hmm_norm_pdf(x=data, mu=mu_p[0], sd=sd_p[0])
-#     for i in range(1, len(mu_p)):
-#         bx2_temp = np.append(bx2_temp, hmm_norm_pdf(x=data, mu=mu_p[i], sd=sd_p[i]), axis=1)
-#     bx2 = np.max(bx2_temp, axis=1)
-#     alpha2 = np.array(np.log(bx2[0] * pi_p)).reshape((1,))
-#     # bx2 = hmm_norm_pdf(x=data, mu=params.loc[1, 'mu'], sd=params.loc[1, 'sd'])  # old code for 2 distributions
-#     # alpha2 = np.array(np.log(bx2[0] * params.loc[1, 'pi']))  # old code for 2 distributions
-#
-#     # Initial m values (slightly modified from R code)
-#     m1_alpha = np.array(max(alpha1, alpha2))
-#     m2_alpha = np.array(max(alpha1, alpha2))
-#
-#     for t in range(1, n):
-#         # Alpha for i=1, there will need to be j classes (neutral, link, sweep, ...)
-#         m1_alpha_j1 = (alpha1[t - 1]) + np.log(A_new[0, 0])  # m when j=0 and i=0
-#         m1_alpha_j2 = (alpha2[t - 1]) + np.log(A_new[1, 0])  # m when j=1 and i=0
-#         m1_alpha = np.append(m1_alpha, max(m1_alpha_j1, m1_alpha_j2))  # max of m1_j1 and m1_j2
-#         # calculation for alpha when i=1
-#         alpha1 = np.append(alpha1, np.log(bx1[t]) + m1_alpha[t] + np.log(np.exp(m1_alpha_j1 - m1_alpha[t]) +
-#                                                                          np.exp(m1_alpha_j2 - m1_alpha[t])))
+def hmm_forward(data, A_trans, pi):
+    # some initializations and settings
+    n = len(data)
+    A_new = A_trans
 
-#         # Alpha for i=2, there will need to be j classes (neutral, link, sweep, ...)
-#         m2_alpha_j1 = (alpha1[t - 1]) + np.log(A_new[0, 1])  # m when j=1 and i=2
-#         m2_alpha_j2 = (alpha2[t - 1]) + np.log(A_new[1, 1])  # m when j=2 and i=2
-#         m2_alpha = np.append(m2_alpha, max(m2_alpha_j1, m2_alpha_j2))  # max of m2_j1 and m2_j2
-#         # calculation of alpha when i=2
-#         alpha2 = np.append(alpha2, np.log(bx2[t]) + m2_alpha[t] + np.log(np.exp(m2_alpha_j1 - m2_alpha[t]) +
-#                                                                          np.exp(m2_alpha_j2 - m2_alpha[t])))
-#
-#     # max value for log-likelihood, forward algorithm
-#     m_alpha_ll = max(alpha1[n-1], alpha2[n-1])
-#     # Forward algorithm log-likelihood
-#     fwd_ll = m_alpha_ll + np.log(np.exp(alpha1[n-1] - m_alpha_ll) + np.exp(alpha2[n-1] - m_alpha_ll))
-#     # package the alpha vectors into a list
-#     alpha = [alpha1, alpha2]
-#
-#     return fwd_ll, alpha
+    # this needs to be scrapped and replaced with the gmm data and init_df
+    # mu_n = params['mu'][params['state'] == 'neutral'].tolist()
+    # mu_p = params['mu'][params['state'] == 'sweep'].tolist()
+    # sd_n = params['sd'][params['state'] == 'neutral'].tolist()
+    # sd_p = params['sd'][params['state'] == 'sweep'].tolist()
+    # pi_n = params['pi'][params['state'] == 'neutral'].tolist()[0]
+    # pi_p = params['pi'][params['state'] == 'sweep'].tolist()[0]
+
+    mu_n = [-1.21758821, -0.75719649]
+    mu_p = [0.39927606]
+    sd_n = [0.12109503**0.5, 0.08834092**0.5]  # needs to be sqr root
+    sd_p = [0.37233887**0.5]
+    wgt_n = [0.42728606, 0.57271394]
+    wgt_p = [1]
+    pi_n = pi[0]
+    pi_p = pi[1]
+
+
+
+    # Probability density values for the data using distribution 1
+    """
+    [see sync notes 10/24/2023]
+    I did make a mistake with the bx1 and bx2 calculation. What I should have done is calculate
+    the pdf for each of the neutral humps (modes) and then multiply those pdf by the weight of each hump. This is not
+    an urgent problem to fix b/c we will get these weights from the GMM anyway, but probably worth adding on my own.
+    See day 12 notes from class, but the idea is below. basically if hump-1 has weight of 0.25 and hump-2 has weight
+    0.75 then the pdf would be [wgt1 * pdf1 + wgt2 * pdf2]. This can be done using g.weights_
+    """
+    bx1_temp = hmm_norm_pdf(x=data, mu=mu_n[0], sd=sd_n[0]) * wgt_n[0]
+    for i in range(1, len(mu_n)):
+        temp1 = hmm_norm_pdf(x=data, mu=mu_n[i], sd=sd_n[i]) * wgt_n[i]
+        bx1_temp = np.append(bx1_temp, temp1, axis=0)
+    bx1_temp = bx1_temp.reshape((len(data), len(mu_n)), order='F')
+    bx1 = np.sum(bx1_temp, axis=1)
+    # I think that once the weights are included, the np.max function will be replaced with np.sum
+    # bx1 = np.sum(bx1_temp, axis=1)
+    alpha1 = np.array(np.log(bx1[0] * pi_n)).reshape((1,))
+    # bx1 = hmm_norm_pdf(x=data, mu=params.loc[0, 'mu'], sd=params.loc[0, 'sd'])  # old code for 2 distributions
+    # alpha1 = np.array(np.log(bx1[0] * params.loc[0, 'pi']))  # old code for 2 distributions
+
+    # Probability density values for the data using distribution 2
+    bx2_temp = hmm_norm_pdf(x=data, mu=mu_p[0], sd=sd_p[0]) * wgt_p[0]
+    for i in range(1, len(mu_p)):
+        temp1 = hmm_norm_pdf(x=data, mu=mu_n[i], sd=sd_n[i]) * wgt_p[i]
+        bx2_temp = np.append(bx2_temp, temp1, axis=0)
+    bx2_temp = bx2_temp.reshape((len(data), len(mu_p)), order='F')
+    bx2 = np.sum(bx2_temp, axis=1)
+    alpha2 = np.array(np.log(bx2[0] * pi_p)).reshape((1,))
+    # bx2 = hmm_norm_pdf(x=data, mu=params.loc[1, 'mu'], sd=params.loc[1, 'sd'])  # old code for 2 distributions
+    # alpha2 = np.array(np.log(bx2[0] * params.loc[1, 'pi']))  # old code for 2 distributions
+
+    # Initial m values (slightly modified from R code)
+    m1_alpha = np.array(max(alpha1, alpha2))
+    m2_alpha = np.array(max(alpha1, alpha2))
+
+    for t in range(1, n):
+        if t % 1000 == 0:
+            print(t)
+        # Alpha for i=1, there will need to be j classes (neutral, link, sweep, ...)
+        m1_alpha_j1 = (alpha1[t - 1]) + np.log(A_new[0, 0])  # m when j=0 and i=0
+        m1_alpha_j2 = (alpha2[t - 1]) + np.log(A_new[1, 0])  # m when j=1 and i=0
+        m1_alpha = np.append(m1_alpha, max(m1_alpha_j1, m1_alpha_j2))  # max of m1_j1 and m1_j2
+        # calculation for alpha when i=1
+        alpha1 = np.append(alpha1, np.log(bx1[t]) + m1_alpha[t] + np.log(np.exp(m1_alpha_j1 - m1_alpha[t]) +
+                                                                         np.exp(m1_alpha_j2 - m1_alpha[t])))
+
+        # Alpha for i=2, there will need to be j classes (neutral, link, sweep, ...)
+        m2_alpha_j1 = (alpha1[t - 1]) + np.log(A_new[0, 1])  # m when j=1 and i=2
+        m2_alpha_j2 = (alpha2[t - 1]) + np.log(A_new[1, 1])  # m when j=2 and i=2
+        m2_alpha = np.append(m2_alpha, max(m2_alpha_j1, m2_alpha_j2))  # max of m2_j1 and m2_j2
+        # calculation of alpha when i=2
+        alpha2 = np.append(alpha2, np.log(bx2[t]) + m2_alpha[t] + np.log(np.exp(m2_alpha_j1 - m2_alpha[t]) +
+                                                                         np.exp(m2_alpha_j2 - m2_alpha[t])))
+
+    # max value for log-likelihood, forward algorithm
+    m_alpha_ll = max(alpha1[n-1], alpha2[n-1])
+    # Forward algorithm log-likelihood
+    fwd_ll = m_alpha_ll + np.log(np.exp(alpha1[n-1] - m_alpha_ll) + np.exp(alpha2[n-1] - m_alpha_ll))
+    # package the alpha vectors into a list
+    alpha = [alpha1, alpha2]
+
+    return fwd_ll, alpha
 
 
 def hmm_forward_new(gmm_params, data, A_trans, pi):
@@ -207,15 +224,17 @@ def hmm_forward_new(gmm_params, data, A_trans, pi):
         # adjust for the prior probability of the state. The initial log_alpha value is nothing more than a kick off
         # value. Basically, what's the probability of being in any one of the x states/classes. The initial value
         # will be the same for all classes
-        temp = []
+        # temp = []
         for c in range(len(classes)):
-            temp.append(np.log(bx[c][0][0]) + np.log(pi[c]))  # bx fixed at the first column b/c this is all that is needed to initiate
-        log_alpha_max = max(temp)
-        for c in range(len(classes)):
-            log_alpha[c].append(log_alpha_max)
+            # temp.append(np.log(bx[c][0][0]) + np.log(pi[c]))  # bx fixed at the first column b/c this is all that is needed to initiate
+            log_alpha[c].append(np.log(bx[c][0][0]) + np.log(pi[c]))
+
+        # log_alpha_max = max(temp)
+        # for c in range(len(classes)):
+        #     log_alpha[c].append(log_alpha_max)
 
         """ Begin cycling through each sample and each class """
-        for t in range(1, n):  # cycle through all of the samples
+        for t in range(1, n):  # cycle through all the samples
             for ci in range(len(classes)):
                 """ determine max alpha for a given class """
                 m_alpha_temp = []
@@ -233,12 +252,24 @@ def hmm_forward_new(gmm_params, data, A_trans, pi):
                 exp_sum[ci].append(sum(exp_sum_temp))
 
                 """ finally, update log alpha """
-                b = np.log(bx[ci][0][t])  # the [0] is b/c there is alway only 1 list per class
+                b = np.log(bx[ci][0][t])  # the [0] is b/c there is always only 1 list per class
                 m = m_alpha[ci][t-1]  # t-1 b/c the max alpha is initially updated at t=1
                 e = exp_sum[ci][t-1]  # t-1 b/c the max alpha is initially updated at t=1
                 log_alpha[ci].append(b + m + np.log(e))
 
-    return log_alpha
+        # max value for log-likelihood, forward algorithm
+        temp = []
+        for c in range(len(classes)):
+            temp.append(log_alpha[c][n-1])
+        m_alpha_ll = max(temp)
+        # Forward algorithm log-likelihood
+        temp = []
+        for c in range(len(classes)):
+            temp.append(np.exp(log_alpha[c][len(data)-1] - m_alpha_ll))
+        temp = np.log(sum(temp))
+        fwd_ll = m_alpha_ll + temp
+
+    return fwd_ll, log_alpha
 
 
 def hmm_backward(params, data, A_trans):
@@ -460,7 +491,8 @@ gmm_params = gmm_params[gmm_params['stat'] == 'xpehh'].reset_index(drop=True)  #
 # this will need to be a 'get' function, but keep it external for now
 data_orig = pd.read_table('../../swifr_pkg/test_data/simulations_4_swifr_test_2class/test/test', sep='\t')
 # for dev, just use xpehh
-data = data_orig['xpehh'][data_orig['xpehh'] != -998]
+data = data_orig['xpehh'][data_orig['xpehh'] != -998].reset_index(drop=True)
+data = data.iloc[0:1000]
 # data = np.array(data['xpehh']).reshape((len(data), 1))  # not sure if I need to convert to numpy, don't if not needed
 
 # s_means = g_sweep.means_
@@ -474,8 +506,11 @@ a_list = [0.999, 0.001, 1, 0]  # transition matrix in a00, a01, a10, a11 format
 A_trans = hmm_init_trans(a_list=a_list)
 pi = [0.9999, 0.0001]  # state probabilities for neutral and sweep
 
-fwd_test = hmm_forward_new(gmm_params, data, A_trans, pi)
-
+fwd_ll_new, fwd_new = hmm_forward_new(gmm_params, data, A_trans, pi)
+# fwd_ll_old, fwd_old = hmm_forward(data, A_trans, pi)
+#
+# print(fwd_ll_old)
+print(fwd_ll_new)
 print('done')
 
 
