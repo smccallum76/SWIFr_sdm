@@ -173,13 +173,16 @@ def hmm_forward_new(gmm_params, data, A_trans, pi):
     # create a collection of lists that can be used to store intermediate values
     bx = {}
     log_alpha = {}
-    m_alpha = {}
+    m_alpha = {}  # holds the max (log) alpha for each iteration
+    exp_sum = {}
     for x in range(len(classes)):
         bx[x] = []
         log_alpha[x] = []
         m_alpha[x] = []
+        exp_sum[x] = []
 
     for s in stats:
+        """ build the matrix of pdf values for each class [may want to make this its own function] """
         for c in range(len(classes)):
             # extract the path to the correct gmm based on the stat and the class
             gmm_current_path = gmm_params['gmm_path'][(gmm_params['stat'] == s) & (gmm_params['class'] == classes[c])].reset_index(drop=True)
@@ -200,12 +203,10 @@ def hmm_forward_new(gmm_params, data, A_trans, pi):
         # gmm_params df. Therefore, each row of bx_matrix pertains to the same specific stat and class as that of the
         # same row in gmm_params.
 
-        """ To this point all should be good to go. The bx_matrix has as many rows as there are stats x classes """
-
+        """ Kick off values adjusted for the priors """
         # adjust for the prior probability of the state. The initial log_alpha value is nothing more than a kick off
         # value. Basically, what's the probability of being in any one of the x states/classes. The initial value
         # will be the same for all classes
-
         temp = []
         for c in range(len(classes)):
             temp.append(np.log(bx[c][0][0]) + np.log(pi[c]))  # bx fixed at the first column b/c this is all that is needed to initiate
@@ -213,48 +214,31 @@ def hmm_forward_new(gmm_params, data, A_trans, pi):
         for c in range(len(classes)):
             log_alpha[c].append(log_alpha_max)
 
+        """ Begin cycling through each sample and each class """
         for t in range(1, n):  # cycle through all the samples
             for ci in range(len(classes)):
+                """ determine max alpha for a given class """
                 m_alpha_temp = []
                 for cj in range(len(classes)):
                     # Alpha for i=1, there will need to be j classes (neutral, link, sweep, ...)
                     # what about a temp m1_alpha to hold the values...I just need the max
-
                     m_alpha_temp.append(log_alpha[cj][t - 1] + np.log(A_new[cj, ci]))
-                m_alpha[ci].append(max(m_alpha_temp))
-                ''' I think this works to this point, just keep rolling with this workflow below'''
+                m_alpha[ci].append(max(m_alpha_temp))  # this may be able to be flushed after each iteration (it's needed only as calc)
 
-                    # this part is f'd...cj, ci will be 0,0 and that's not right
-                    # m1_alpha_j2 = (log_alpha[cj][t - 1]) + np.log(A_new[cj, ci])  # m when j=1 and i=0
-                    # m1_alpha = np.append(m1_alpha, max(m1_alpha_j1, m1_alpha_j2))  # max of m1_j1 and m1_j2
-                    # # calculation for alpha when i=1
-                    # alpha1 = np.append(alpha1, np.log(bx1[t]) + m1_alpha[t] + np.log(np.exp(m1_alpha_j1 - m1_alpha[t]) +
-                    #                                                                  np.exp(m1_alpha_j2 - m1_alpha[t])))
+                """ determine the sum of the exponential for a given class """
+                exp_sum_temp = []
+                for cj in range(len(classes)):
+                    # note, m_alpha is t-1 b/c the first m_alpha entry was done at t=1 (so it is offset)
+                    exp_sum_temp.append(np.exp(log_alpha[cj][t - 1] + np.log(A_new[cj, ci]) - m_alpha[ci][t-1]))
+                exp_sum[ci].append(sum(exp_sum_temp))
 
-                    # # Alpha for i=2, there will need to be j classes (neutral, link, sweep, ...)
-                    # m2_alpha_j1 = (alpha1[t - 1]) + np.log(A_new[0, 1])  # m when j=1 and i=2
-                    # m2_alpha_j2 = (alpha2[t - 1]) + np.log(A_new[1, 1])  # m when j=2 and i=2
-                    # m2_alpha = np.append(m2_alpha, max(m2_alpha_j1, m2_alpha_j2))  # max of m2_j1 and m2_j2
-                    # # calculation of alpha when i=2
-                    # alpha2 = np.append(alpha2, np.log(bx2[t]) + m2_alpha[t] + np.log(np.exp(m2_alpha_j1 - m2_alpha[t]) +
-                    #                                                                  np.exp(m2_alpha_j2 - m2_alpha[t])))
+                """ finally, update log alpha """
+                b = np.log(bx[ci][0][t])  # the [0] is b/c there is alway only 1 list per class
+                m = m_alpha[ci][t-1]  # t-1 b/c the max alpha is initially updated at t=1
+                e = exp_sum[ci][t-1]  # t-1 b/c the max alpha is initially updated at t=1
+                log_alpha[ci].append(b + m + np.log(e))
 
-                # Alpha for i=1, there will need to be j classes (neutral, link, sweep, ...)
-                # the basic eqn that has been log transformed is shown below
-                # log_alpha = log(bx) + m + log Summation{exp{log alpha[i-1] + log[a_trans_ji] - m}}
-                # m_transition = []
-                # for cj in range(len(classes)):
-                #     m_transition.append((log_alpha[t - 1]) + np.log(A_new[cj, ci]))
-                # m_trans_max = np.max(m_transition)
-                #
-                # exp_summation = 0
-                # for cj in range(len(classes)):
-                #     exp_summation += np.exp((log_alpha[t-1]) + np.log(A_new[cj, ci]) - m_trans_max)
-                #
-                # log_alpha = np.append(log_alpha, np.log(bx_matrix[ci, t]) + m_trans_max + np.log(exp_summation))
-        # alpha = [alpha1, alpha2] # this will need to have stats x classes column count
-
-    return fwd_ll, alpha
+    return log_alpha
 
 
 def hmm_backward(params, data, A_trans):
