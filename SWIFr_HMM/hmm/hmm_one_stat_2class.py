@@ -170,23 +170,17 @@ def hmm_forward(data, A_trans, pi):
     return fwd_ll, alpha
 
 
-def hmm_forward_new(gmm_params, data, A_trans, pi):
+def hmm_forward_new(gmm_params, data, A_trans, pi, stat='xpehh'):
+    # the 'stat' variable is not ideal, but will work as a placeholder that represents the specific data column that
+    # should be used.
+
     # some initializations and settings
     n = len(data)
     A_new = A_trans
 
     # Probability density values for the data using distribution 1
-    """
-    [see sync notes 10/24/2023]
-    I did make a mistake with the bx1 and bx2 calculation. What I should have done is calculate 
-    the pdf for each of the neutral humps (modes) and then multiply those pdf by the weight of each hump. This is not 
-    an urgent problem to fix b/c we will get these weights from the GMM anyway, but probably worth adding on my own. 
-    See day 12 notes from class, but the idea is below. basically if hump-1 has weight of 0.25 and hump-2 has weight 
-    0.75 then the pdf would be [wgt1 * pdf1 + wgt2 * pdf2]. This can be done using g.weights_
-    """
-    stats = gmm_params['stat'].unique()
-    classes = gmm_params['class'].unique()
 
+    classes = gmm_params['class'].unique()
     # create a collection of lists that can be used to store intermediate values
     bx = {}
     log_alpha = {}
@@ -198,111 +192,114 @@ def hmm_forward_new(gmm_params, data, A_trans, pi):
         m_alpha[x] = []
         exp_sum[x] = []
 
-    for s in stats:
-        """ build the matrix of pdf values for each class [may want to make this its own function] """
-        for c in range(len(classes)):
-            # extract the path to the correct gmm based on the stat and the class
-            gmm_current_path = gmm_params['gmm_path'][(gmm_params['stat'] == s) & (gmm_params['class'] == classes[c])].reset_index(drop=True)
-            # load the correct gmm based on the correct path
-            gmm = hmm_pickle_load(gmm_current_path.loc[0])  # required to ensure that the gmm model is extracted from the df
-            # extract the components, mean, covariances, and weights for the current gmm
-            components = gmm.n_components
-            mu = gmm.means_
-            cov = gmm.covariances_
-            wgt = gmm.weights_
-            for k in range(components):
-                if k == 0:  # initialize the bx vector
-                    bx_temp = hmm_norm_pdf(x=data, mu=mu[k], sd=cov[k]**0.5) * wgt[k]
-                else:
-                    bx_temp = np.append(bx_temp, hmm_norm_pdf(x=data, mu=mu[k], sd=cov[k]**0.5) * wgt[k], axis=0)
-            bx[c].append(np.sum(bx_temp, axis=0).tolist())
-        # the bx matrix is the matrix of pdf's for each stat and class. It is organized in the same manner as the
-        # gmm_params df. Therefore, each row of bx_matrix pertains to the same specific stat and class as that of the
-        # same row in gmm_params.
+    """ build the matrix of pdf values for each class [may want to make this its own function] """
+    for c in range(len(classes)):
+        # extract the path to the correct gmm based on the stat and the class
+        gmm_current_path = gmm_params['gmm_path'][(gmm_params['stat'] == stat) &
+                                                  (gmm_params['class'] == classes[c])].reset_index(drop=True)
+        # load the correct gmm based on the correct path
+        gmm = hmm_pickle_load(gmm_current_path.loc[0])  # required to ensure that the gmm model is extracted from the df
+        # extract the components, mean, covariances, and weights for the current gmm
+        components = gmm.n_components
+        mu = gmm.means_
+        cov = gmm.covariances_
+        wgt = gmm.weights_
+        for k in range(components):
+            if k == 0:  # initialize the bx vector
+                bx_temp = hmm_norm_pdf(x=data, mu=mu[k], sd=cov[k]**0.5) * wgt[k]
+            else:
+                bx_temp = np.append(bx_temp, hmm_norm_pdf(x=data, mu=mu[k], sd=cov[k]**0.5) * wgt[k], axis=0)
+        bx[c].append(np.sum(bx_temp, axis=0).tolist())
+    # the bx matrix is the matrix of pdf's for each stat and class. It is organized in the same manner as the
+    # gmm_params df. Therefore, each row of bx_matrix pertains to the same specific stat and class as that of the
+    # same row in gmm_params.
 
-        """ Kick off values adjusted for the priors """
-        # adjust for the prior probability of the state. The initial log_alpha value is nothing more than a kick off
-        # value. Basically, what's the probability of being in any one of the x states/classes. The initial value
-        # will be the same for all classes
-        # temp = []
-        for c in range(len(classes)):
-            # temp.append(np.log(bx[c][0][0]) + np.log(pi[c]))  # bx fixed at the first column b/c this is all that is needed to initiate
-            log_alpha[c].append(np.log(bx[c][0][0]) + np.log(pi[c]))
+    """ Kick off values adjusted for the priors """
+    # adjust for the prior probability of the state. The initial log_alpha value is nothing more than a kick off
+    # value. Basically, what's the probability of being in any one of the x states/classes. The initial value
+    # will be the same for all classes
+    # temp = []
+    for c in range(len(classes)):
+        # temp.append(np.log(bx[c][0][0]) + np.log(pi[c]))  # bx fixed at the first column b/c this is all that is needed to initiate
+        log_alpha[c].append(np.log(bx[c][0][0]) + np.log(pi[c]))
 
-        # log_alpha_max = max(temp)
-        # for c in range(len(classes)):
-        #     log_alpha[c].append(log_alpha_max)
+    """ Begin cycling through each sample and each class """
+    for t in range(1, n):  # cycle through all the samples
+        for ci in range(len(classes)):
+            """ determine max alpha for a given class """
+            m_alpha_temp = []
+            for cj in range(len(classes)):
+                # Alpha for i=1, there will need to be j classes (neutral, link, sweep, ...)
+                # what about a temp m1_alpha to hold the values...I just need the max
+                m_alpha_temp.append(log_alpha[cj][t - 1] + np.log(A_new[cj, ci]))
+            m_alpha[ci].append(max(m_alpha_temp))  # this may be able to be flushed after each iteration (it's needed only as calc)
 
-        """ Begin cycling through each sample and each class """
-        for t in range(1, n):  # cycle through all the samples
-            for ci in range(len(classes)):
-                """ determine max alpha for a given class """
-                m_alpha_temp = []
-                for cj in range(len(classes)):
-                    # Alpha for i=1, there will need to be j classes (neutral, link, sweep, ...)
-                    # what about a temp m1_alpha to hold the values...I just need the max
-                    m_alpha_temp.append(log_alpha[cj][t - 1] + np.log(A_new[cj, ci]))
-                m_alpha[ci].append(max(m_alpha_temp))  # this may be able to be flushed after each iteration (it's needed only as calc)
+            """ determine the sum of the exponential for a given class """
+            exp_sum_temp = []
+            for cj in range(len(classes)):
+                # note, m_alpha is t-1 b/c the first m_alpha entry was done at t=1 (so it is offset)
+                exp_sum_temp.append(np.exp(log_alpha[cj][t - 1] + np.log(A_new[cj, ci]) - m_alpha[ci][t-1]))
+            exp_sum[ci].append(sum(exp_sum_temp))
 
-                """ determine the sum of the exponential for a given class """
-                exp_sum_temp = []
-                for cj in range(len(classes)):
-                    # note, m_alpha is t-1 b/c the first m_alpha entry was done at t=1 (so it is offset)
-                    exp_sum_temp.append(np.exp(log_alpha[cj][t - 1] + np.log(A_new[cj, ci]) - m_alpha[ci][t-1]))
-                exp_sum[ci].append(sum(exp_sum_temp))
+            """ finally, update log alpha """
+            b = np.log(bx[ci][0][t])  # the [0] is b/c there is always only 1 list per class
+            m = m_alpha[ci][t-1]  # t-1 b/c the max alpha is initially updated at t=1
+            e = exp_sum[ci][t-1]  # t-1 b/c the max alpha is initially updated at t=1
+            log_alpha[ci].append(b + m + np.log(e))
 
-                """ finally, update log alpha """
-                b = np.log(bx[ci][0][t])  # the [0] is b/c there is always only 1 list per class
-                m = m_alpha[ci][t-1]  # t-1 b/c the max alpha is initially updated at t=1
-                e = exp_sum[ci][t-1]  # t-1 b/c the max alpha is initially updated at t=1
-                log_alpha[ci].append(b + m + np.log(e))
-
-        # max value for log-likelihood, forward algorithm
-        temp = []
-        for c in range(len(classes)):
-            temp.append(log_alpha[c][n-1])
-        m_alpha_ll = max(temp)
-        # Forward algorithm log-likelihood
-        temp = []
-        for c in range(len(classes)):
-            temp.append(np.exp(log_alpha[c][len(data)-1] - m_alpha_ll))
-        temp = np.log(sum(temp))
-        fwd_ll = m_alpha_ll + temp
+    # max value for log-likelihood, forward algorithm
+    temp = []
+    for c in range(len(classes)):
+        temp.append(log_alpha[c][n-1])
+    m_alpha_ll = max(temp)
+    # Forward algorithm log-likelihood
+    temp = []
+    for c in range(len(classes)):
+        temp.append(np.exp(log_alpha[c][n-1] - m_alpha_ll))
+    temp = np.log(sum(temp))
+    fwd_ll = m_alpha_ll + temp
 
     return fwd_ll, log_alpha
 
 
-def hmm_backward(params, data, A_trans):
+def hmm_backward(data, A_trans, pi):
     # some initializations and settings
     n = len(data)
     A_new = A_trans
-    mu_n = params['mu'][params['state'] == 'neutral'].tolist()
-    mu_p = params['mu'][params['state'] == 'sweep'].tolist()
-    sd_n = params['sd'][params['state'] == 'neutral'].tolist()
-    sd_p = params['sd'][params['state'] == 'sweep'].tolist()
-    pi_n = params['pi'][params['state'] == 'neutral'].tolist()[0]
-    pi_p = params['pi'][params['state'] == 'sweep'].tolist()[0]
+    # mu_n = params['mu'][params['state'] == 'neutral'].tolist()
+    # mu_p = params['mu'][params['state'] == 'sweep'].tolist()
+    # sd_n = params['sd'][params['state'] == 'neutral'].tolist()
+    # sd_p = params['sd'][params['state'] == 'sweep'].tolist()
+    # pi_n = params['pi'][params['state'] == 'neutral'].tolist()[0]
+    # pi_p = params['pi'][params['state'] == 'sweep'].tolist()[0]
+
+    mu_n = [-1.21758821, -0.75719649]
+    mu_p = [0.39927606]
+    sd_n = [0.12109503**0.5, 0.08834092**0.5]  # needs to be sqr root
+    sd_p = [0.37233887**0.5]
+    wgt_n = [0.42728606, 0.57271394]
+    wgt_p = [1]
+    pi_n = pi[0]
+    pi_p = pi[1]
 
     # Initial values for beta1 and beta2 at t=n
     # Probability density values for the data using distribution 1
-    """
-    [see sync notes 10/24/2023]
-    I did make a mistake with the bx1 and bx2 calculation. What I should have done is calculate 
-    the pdf for each of the neutral humps (modes) and then multiply those pdf by the weight of each hump. This is not 
-    an urgent problem to fix b/c we will get these weights from the GMM anyway, but probably worth adding on my own. 
-    See day 12 notes from class, but the idea is below. basically if hump-1 has weight of 0.25 and hump-2 has weight 
-    0.75 then the pdf would be [wgt1 * pdf1 + wgt2 * pdf2]. This can be done using g.weights_
-    """
-    bx1_temp = hmm_norm_pdf(x=data, mu=mu_n[0], sd=sd_n[0])
+
+    bx1_temp = hmm_norm_pdf(x=data, mu=mu_n[0], sd=sd_n[0]) * wgt_n[0]
     for i in range(1, len(mu_n)):
-        bx1_temp = np.append(bx1_temp, hmm_norm_pdf(x=data, mu=mu_n[i], sd=sd_n[i]), axis=1)
-    bx1 = np.max(bx1_temp, axis=1).reshape(len(bx1_temp), 1)
+        temp1 = hmm_norm_pdf(x=data, mu=mu_n[i], sd=sd_n[i]) * wgt_n[i]
+        bx1_temp = np.append(bx1_temp, temp1, axis=0)
+    bx1_temp = bx1_temp.reshape((len(data), len(mu_n)), order='F')
+    bx1 = np.sum(bx1_temp, axis=1)
+
 
     # Probability density values for the data using distribution 2
-    bx2_temp = hmm_norm_pdf(x=data, mu=mu_p[0], sd=sd_p[0])
+    bx2_temp = hmm_norm_pdf(x=data, mu=mu_p[0], sd=sd_p[0]) * wgt_p[0]
     for i in range(1, len(mu_p)):
-        bx2_temp = np.append(bx2_temp, hmm_norm_pdf(x=data, mu=mu_p[i], sd=sd_p[i]), axis=1)
-    bx2 = np.max(bx2_temp, axis=1).reshape((len(bx2_temp), 1))
+        temp1 = hmm_norm_pdf(x=data, mu=mu_n[i], sd=sd_n[i]) * wgt_p[i]
+        bx2_temp = np.append(bx2_temp, temp1, axis=0)
+    bx2_temp = bx2_temp.reshape((len(data), len(mu_p)), order='F')
+    bx2 = np.sum(bx2_temp, axis=1)
 
     beta1 = np.zeros(n)
     beta1[n-1] = (np.log(1))
@@ -311,20 +308,20 @@ def hmm_backward(params, data, A_trans):
 
     for t in reversed(range(0, (n-1))):  # recall that n-2 is actually the second to last position and n-1 is the last position
       # beta for i=1
-      m1_beta_j1 = (beta1[t+1] + np.log(A_new[0, 0]) + np.log(bx1[t+1]))[0]  # m when j=0 and i=0
-      m1_beta_j2 = (beta2[t+1] + np.log(A_new[0, 1]) + np.log(bx2[t+1]))[0]  # m when j=1 and i=0
+      m1_beta_j1 = (beta1[t+1] + np.log(A_new[0, 0]) + np.log(bx1[t+1]))  # m when j=0 and i=0
+      m1_beta_j2 = (beta2[t+1] + np.log(A_new[0, 1]) + np.log(bx2[t+1]))  # m when j=1 and i=0
       m1_beta = max(m1_beta_j1, m1_beta_j2)
       beta1[t] = m1_beta + np.log(np.exp(m1_beta_j1 - m1_beta) + np.exp(m1_beta_j2 - m1_beta))
 
       # beta for i=2
-      m2_beta_j1 = (beta1[t+1] + np.log(A_new[1, 0]) + np.log(bx1[t+1]))[0]  # m when j=0 and i=1
-      m2_beta_j2 = (beta2[t+1] + np.log(A_new[1, 1]) + np.log(bx2[t+1]))[0]  # m when j=1 and i=1
+      m2_beta_j1 = (beta1[t+1] + np.log(A_new[1, 0]) + np.log(bx1[t+1]))  # m when j=0 and i=1
+      m2_beta_j2 = (beta2[t+1] + np.log(A_new[1, 1]) + np.log(bx2[t+1]))  # m when j=1 and i=1
       m2_beta = max(m2_beta_j1, m2_beta_j2)
       beta2[t] = m2_beta + np.log(np.exp(m2_beta_j1 - m2_beta) + np.exp(m2_beta_j2 - m2_beta))
 
     # first and second parts of m value for log-likelihood backward algorithm
-    m_beta_ll1 = (beta1[0] + np.log(pi_n) + np.log(bx1[0]))[0]
-    m_beta_ll2 = (beta2[0] + np.log(pi_p) + np.log(bx2[0]))[0]
+    m_beta_ll1 = (beta1[0] + np.log(pi_n) + np.log(bx1[0]))
+    m_beta_ll2 = (beta2[0] + np.log(pi_p) + np.log(bx2[0]))
 
     # m value for log likelihood, backward algorithm
     m_beta_ll = max(m_beta_ll1, m_beta_ll2)
@@ -334,6 +331,97 @@ def hmm_backward(params, data, A_trans):
     beta = [beta1, beta2]
 
     return bwd_ll, beta
+
+def hmm_backward_new(gmm_params, data, A_trans, pi, stat='xpehh'):
+    # the 'stat' variable is not ideal, but will work as a placeholder that represents the specific data column that
+    # should be used.
+
+    # some initializations and settings
+    n = len(data)
+    A_new = A_trans
+
+    # Probability density values for the data using distribution 1
+
+    classes = gmm_params['class'].unique()
+    # create a collection of lists that can be used to store intermediate values
+    bx = {}
+    log_beta = {}
+    # m_beta = {}  # holds the max (log) alpha for each iteration
+    # exp_sum = {}
+    for x in range(len(classes)):
+        bx[x] = []
+        log_beta[x] = []
+        # m_beta[x] = []
+        # exp_sum[x] = []
+
+    """ build the matrix of pdf values for each class [may want to make this its own function] """
+    for c in range(len(classes)):
+        # extract the path to the correct gmm based on the stat and the class
+        gmm_current_path = gmm_params['gmm_path'][(gmm_params['stat'] == stat) &
+                                                  (gmm_params['class'] == classes[c])].reset_index(drop=True)
+        # load the correct gmm based on the correct path
+        gmm = hmm_pickle_load(gmm_current_path.loc[0])  # required to ensure that the gmm model is extracted from the df
+        # extract the components, mean, covariances, and weights for the current gmm
+        components = gmm.n_components
+        mu = gmm.means_
+        cov = gmm.covariances_
+        wgt = gmm.weights_
+        for k in range(components):
+            if k == 0:  # initialize the bx vector
+                bx_temp = hmm_norm_pdf(x=data, mu=mu[k], sd=cov[k]**0.5) * wgt[k]
+            else:
+                bx_temp = np.append(bx_temp, hmm_norm_pdf(x=data, mu=mu[k], sd=cov[k]**0.5) * wgt[k], axis=0)
+        bx[c].append(np.sum(bx_temp, axis=0).tolist())
+    # the bx matrix is the matrix of pdf's for each stat and class. It is organized in the same manner as the
+    # gmm_params df. Therefore, each row of bx_matrix pertains to the same specific stat and class as that of the
+    # same row in gmm_params.
+
+    """ Kick off values adjusted for the priors """
+    # adjust for the prior probability of the state. The initial log_alpha value is nothing more than a kick off
+    # value. Basically, what's the probability of being in any one of the x states/classes. The initial value
+    # will be the same for all classes
+    for c in range(len(classes)):
+        # log is not needed here b/c the log_beta at location n would be log of 1, which is zero
+        log_beta[c].append([0] * n)
+
+    """ Begin cycling through each sample and each class """
+    for t in reversed(range(0, (n-1))):  # cycle through all the samples
+        for ci in range(len(classes)):
+            """ determine max alpha for a given class """
+            m_beta_temp = []
+            for cj in range(len(classes)):
+                # beta for i=n, there will need to be j classes (neutral, link, sweep, ...)
+                m_beta_temp.append(log_beta[cj][0][t + 1] + np.log(A_new[ci, cj]) + np.log(bx[cj][0][t + 1]))
+            # m_beta[ci].append(max(m_beta_temp))  # this may be able to be flushed after each iteration (it's needed only as calc)
+            m_beta = max(m_beta_temp)
+            """ determine the sum of the exponential for a given class """
+            exp_sum_temp = []
+            for cj in range(len(classes)):
+                exp_sum_temp.append(np.exp(log_beta[cj][0][t + 1] + np.log(A_new[ci, cj]) + np.log(bx[cj][0][t + 1])
+                                           - m_beta))
+            exp_sum = sum(exp_sum_temp)
+
+            """ finally, update log alpha """
+            # b = np.log(bx[ci][0][t])  # the [0] is b/c there is always only 1 list per class
+            m = m_beta  # t-1 b/c the max alpha is initially updated at t=1
+            # e = exp_sum[ci][t+1]  # t-1 b/c the max alpha is initially updated at t=1
+            e = exp_sum
+            log_beta[ci][0][t] = m + np.log(e)
+
+    # max value for log-likelihood, forward algorithm
+    temp = []
+    for c in range(len(classes)):
+        temp.append(log_beta[c][0][0] + np.log(pi[c]) + np.log(bx[c][0][0]))
+    m_beta_ll = max(temp)
+
+    # Forward algorithm log-likelihood
+    temp = []
+    for c in range(len(classes)):
+        temp.append(np.exp(log_beta[c][0][0] + np.log(pi[c]) + np.log(bx[c][0][0]) - m_beta_ll))
+    temp = np.log(sum(temp))
+    bwd_ll = m_beta_ll + temp
+
+    return bwd_ll, log_beta
 
 def hmm_gamma(alpha, beta, n):
     # log gamma z's
@@ -506,22 +594,17 @@ a_list = [0.999, 0.001, 1, 0]  # transition matrix in a00, a01, a10, a11 format
 A_trans = hmm_init_trans(a_list=a_list)
 pi = [0.9999, 0.0001]  # state probabilities for neutral and sweep
 
+# bwd_ll_new, fwd_new = hmm_backward_new(gmm_params, data, A_trans, pi)
+bwd_ll_old, bwd_old = hmm_backward(data, A_trans, pi)
+bwd_ll_new, bwd_new = hmm_backward_new(gmm_params, data, A_trans, pi)
+fwd_ll_old, fwd_old = hmm_forward(data, A_trans, pi)
 fwd_ll_new, fwd_new = hmm_forward_new(gmm_params, data, A_trans, pi)
-# fwd_ll_old, fwd_old = hmm_forward(data, A_trans, pi)
-#
-# print(fwd_ll_old)
+
+print(bwd_ll_old)
+print(bwd_ll_new)
+print(fwd_ll_old)
 print(fwd_ll_new)
 print('done')
-
-
-
-
-
-
-
-
-
-
 
 
 '''
