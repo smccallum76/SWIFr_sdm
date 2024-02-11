@@ -451,6 +451,7 @@ def hmm_gamma_new(alpha, beta, n):
     # np.maximum returns an array that contains the max value of both comparisons, and then np.max returns the max
     # of the np.maximum array.
     """
+    log_gamma = a + b - m - log(sum(exp(a + b - m)))
     To Do:
     - This is currently written as though there are only two states, but it needs to be generalized to handle
     multiple states. For instance, if there were three states, it might look like this:
@@ -461,21 +462,44 @@ def hmm_gamma_new(alpha, beta, n):
     gamma2 = np.exp(log_gamma2)
     gamma3 = 1 - (gamma1 + gamma2)
     """
+    """ Build a dictionary to hold the gamma values """
     # The number of classes will always be equal to the length of alpha or beta (alpha is used)
     class_count = len(alpha)
+    gamma = {}
+    z = {}
+    for x in range(class_count):
+        gamma[x] = []
+        z[x] = np.zeros(n)
+
+    """ Temp list to hold the sum of each alpha and beta vector and then define the max gamma value"""
     temp = []
     for c in range(class_count):
         temp.append(np.add(alpha[c], beta[c]))
     m_gamma = np.max(temp)
-    ''' should be good to this point, need to fix log_gamma1 to be a loop summation) '''
-    # m_gamma = np.max(np.maximum(alpha[0] + beta[0], alpha[1] + beta[1]))
-    log_gamma1 = alpha[0] + beta[0] - m_gamma - np.log(np.exp(alpha[0] + beta[0] - m_gamma) + np.exp(alpha[1] + beta[1] - m_gamma))
-    gamma1 = np.exp(log_gamma1)
 
-    z = np.zeros(n)  # n is the length of the data
+    """ Sum of the exponential component of the gamma function"""
+    temp = []
+    for c in range(class_count):
+        temp.append(np.exp(np.subtract(np.add(alpha[c], beta[c]), m_gamma)))
+    exp_sum = np.log(np.sum(temp, axis=0))
+
+    """ Final gamma sum using all the components, one gamma vector for each class """
+    for c in range(class_count):
+        gamma[c] = np.exp(np.subtract(np.subtract(np.add(alpha[c], beta[c]), m_gamma), exp_sum))
+
+    """ Assign class assignment from random draw and comparison with gamma """
+    # this loop could be problematic in that it is possible for z[class1] and z[class2] could both be assigned
+    # a value of 1 if z_draw happens to be less than both z[class1] and z[class2].
     z_draw = np.random.uniform(low=0, high=1, size=n)
-    z[z_draw <= gamma1] = 1
-    return z, gamma1
+    z_sum = np.zeros(n)  # z_sum is used to ensure that only one class is assigned a value of 1
+    for c in range(class_count):
+        z[c][z_draw <= gamma[c][0]] = 1
+        # z_sum should never exceed 1, but if it does then set the z[c] values the occurrence to 0. Technically this
+        # set up will favor the first class to be assigned a 1, but
+        z_sum = z_sum + z[c]
+        z[c][z_sum > 1] = 0
+
+    return z, gamma
 
 def hmm_update_pi(z, gamma):
     pi1 = len(z[z == 1]) / len(z)
