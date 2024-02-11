@@ -446,6 +446,36 @@ def hmm_gamma(alpha, beta, n):
     z_draw = np.random.uniform(low=0, high=1, size=n)
     z[z_draw <= gamma1] = 1
     return z, gamma1
+def hmm_gamma_new(alpha, beta, n):
+    # log gamma z's
+    # np.maximum returns an array that contains the max value of both comparisons, and then np.max returns the max
+    # of the np.maximum array.
+    """
+    To Do:
+    - This is currently written as though there are only two states, but it needs to be generalized to handle
+    multiple states. For instance, if there were three states, it might look like this:
+    m_gamma = np.max(np.maximum(alpha[0] + beta[0], alpha[1] + beta[1], alpha[2) + beta[2))
+    log_gamma1 = alpha[0] + beta[0] - m_gamma - np.log(np.exp(alpha[0] + beta[0] - m_gamma) + np.exp(alpha[1] + beta[1] - m_gamma + np.exp(alpha[2] + beta[2] - m_gamma))
+    log_gamma2 = alpha[1] + beta[1] - m_gamma - np.log(np.exp(alpha[0] + beta[0] - m_gamma) + np.exp(alpha[1] + beta[1] - m_gamma + np.exp(alpha[2] + beta[2] - m_gamma))
+    gamma1 = np.exp(log_gamma1)
+    gamma2 = np.exp(log_gamma2)
+    gamma3 = 1 - (gamma1 + gamma2)
+    """
+    # The number of classes will always be equal to the length of alpha or beta (alpha is used)
+    class_count = len(alpha)
+    temp = []
+    for c in range(class_count):
+        temp.append(np.add(alpha[c], beta[c]))
+    m_gamma = np.max(temp)
+    ''' should be good to this point, need to fix log_gamma1 to be a loop summation) '''
+    # m_gamma = np.max(np.maximum(alpha[0] + beta[0], alpha[1] + beta[1]))
+    log_gamma1 = alpha[0] + beta[0] - m_gamma - np.log(np.exp(alpha[0] + beta[0] - m_gamma) + np.exp(alpha[1] + beta[1] - m_gamma))
+    gamma1 = np.exp(log_gamma1)
+
+    z = np.zeros(n)  # n is the length of the data
+    z_draw = np.random.uniform(low=0, high=1, size=n)
+    z[z_draw <= gamma1] = 1
+    return z, gamma1
 
 def hmm_update_pi(z, gamma):
     pi1 = len(z[z == 1]) / len(z)
@@ -594,15 +624,19 @@ a_list = [0.999, 0.001, 1, 0]  # transition matrix in a00, a01, a10, a11 format
 A_trans = hmm_init_trans(a_list=a_list)
 pi = [0.9999, 0.0001]  # state probabilities for neutral and sweep
 
-# bwd_ll_new, fwd_new = hmm_backward_new(gmm_params, data, A_trans, pi)
-bwd_ll_old, bwd_old = hmm_backward(data, A_trans, pi)
-bwd_ll_new, bwd_new = hmm_backward_new(gmm_params, data, A_trans, pi)
-fwd_ll_old, fwd_old = hmm_forward(data, A_trans, pi)
-fwd_ll_new, fwd_new = hmm_forward_new(gmm_params, data, A_trans, pi)
+bwd_ll_old, beta_old = hmm_backward(data, A_trans, pi)
+fwd_ll_old, alpha_old = hmm_forward(data, A_trans, pi)
 
-print(bwd_ll_old)
+fwd_ll_new, alpha_new = hmm_forward_new(gmm_params, data, A_trans, pi)
+bwd_ll_new, beta_new = hmm_backward_new(gmm_params, data, A_trans, pi)
+# z_old, gamma_old = hmm_gamma(alpha=alpha_old, beta=beta_old, n=len(data))
+z, gamma = hmm_gamma_new(alpha=alpha_new, beta=beta_new, n=len(data))
+
+
+# print(fwd_ll_old)
+# print(bwd_ll_old)
+
 print(bwd_ll_new)
-print(fwd_ll_old)
 print(fwd_ll_new)
 print('done')
 
