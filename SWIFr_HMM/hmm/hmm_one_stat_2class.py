@@ -142,8 +142,6 @@ def hmm_forward(data, A_trans, pi):
     m2_alpha = np.array(max(alpha1, alpha2))
 
     for t in range(1, n):
-        if t % 1000 == 0:
-            print(t)
         # Alpha for i=1, there will need to be j classes (neutral, link, sweep, ...)
         m1_alpha_j1 = (alpha1[t - 1]) + np.log(A_new[0, 0])  # m when j=0 and i=0
         m1_alpha_j2 = (alpha2[t - 1]) + np.log(A_new[1, 0])  # m when j=1 and i=0
@@ -220,7 +218,7 @@ def hmm_forward_new(gmm_params, data, A_trans, pi, stat='xpehh'):
     # will be the same for all classes
     # temp = []
     for c in range(len(classes)):
-        # temp.append(np.log(bx[c][0][0]) + np.log(pi[c]))  # bx fixed at the first column b/c this is all that is needed to initiate
+        # bx fixed at the first column b/c this is all that is needed to initiate
         log_alpha[c].append(np.log(bx[c][0][0]) + np.log(pi[c]))
 
     """ Begin cycling through each sample and each class """
@@ -507,6 +505,15 @@ def hmm_update_pi(z, gamma):
     pi2 = 1 - pi1
     return pi1, pi2
 
+def hmm_update_pi_new(z):
+
+    class_count = len(z)
+    pi_update = []
+    for c in range(class_count):
+        pi_update.append(len(z[c][z[c] == 1]) / len(z[c]))
+
+    return pi_update
+
 def hmm_update_trans(z):
     # indicator function for the transition matrix
     z1_stay = 0
@@ -634,7 +641,7 @@ gmm_params = gmm_params[gmm_params['stat'] == 'xpehh'].reset_index(drop=True)  #
 data_orig = pd.read_table('../../swifr_pkg/test_data/simulations_4_swifr_test_2class/test/test', sep='\t')
 # for dev, just use xpehh
 data = data_orig['xpehh'][data_orig['xpehh'] != -998].reset_index(drop=True)
-data = data.iloc[0:1000]
+data = data.iloc[0:30000]
 # data = np.array(data['xpehh']).reshape((len(data), 1))  # not sure if I need to convert to numpy, don't if not needed
 
 # s_means = g_sweep.means_
@@ -655,6 +662,7 @@ fwd_ll_new, alpha_new = hmm_forward_new(gmm_params, data, A_trans, pi)
 bwd_ll_new, beta_new = hmm_backward_new(gmm_params, data, A_trans, pi)
 # z_old, gamma_old = hmm_gamma(alpha=alpha_old, beta=beta_old, n=len(data))
 z, gamma = hmm_gamma_new(alpha=alpha_new, beta=beta_new, n=len(data))
+pi = hmm_update_pi_new(z)
 
 
 # print(fwd_ll_old)
