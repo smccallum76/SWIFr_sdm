@@ -533,20 +533,16 @@ def hmm_update_trans(z):
 def hmm_update_trans_new(z):
 
     class_count = len(z)
-    # indicator function for the transition matrix
-    z1_stay = 0
-    z1_arrive = 0
-    for i in range(0, len(z) - 1):
-        if (z[i] == 1) and (z[i + 1] == 1):
-            z1_stay += 1
-        if (z[i] == 0) and (z[i + 1] == 1):
-            z1_arrive += 1
-    # update of transition matrix using the indicator function
-    A_trans[0, 0] = z1_stay / sum(z)
-    A_trans[0, 1] = 1 - A_trans[0, 0]
-    A_trans[1, 0] = z1_arrive / len(z[z == 0])
-    A_trans[1, 1] = 1 - A_trans[1, 0]
-    return A_trans
+    A = np.empty(shape=(class_count, class_count))
+
+    for i in range(class_count):
+        for j in range(class_count):
+            temp = z[i][0:-1] + z[j][1::]
+            A[i, j] = len([k for k in temp if k == 2])
+
+    A = A / len(z[0])
+
+    return A
 
 def hmm_viterbi(params, data, A_trans):
     # some initializations and settings
