@@ -169,14 +169,9 @@ def hmm_forward(data, A_trans, pi):
 
 
 def hmm_forward_new(gmm_params, data, A_trans, pi, stat='xpehh'):
-    # the 'stat' variable is not ideal, but will work as a placeholder that represents the specific data column that
-    # should be used.
-
     # some initializations and settings
     n = len(data)
     A_new = A_trans
-
-    # Probability density values for the data using distribution 1
 
     classes = gmm_params['class'].unique()
     # create a collection of lists that can be used to store intermediate values
@@ -605,56 +600,61 @@ def hmm_viterbi(params, data, A_trans):
 
     return path
 
-def hmm_viterbi_new(params, data, A_trans):
-    """
-    This function has not been updated. I believe that I will need to use a different method to calculate Z than the
-    current 'gamma' method. This is b/c using gamma to calculate z inserts a random component into the class assignment.
-    This results in slight variability in the A_trans (transition) matrix, which in turn means that the path defined
-    by Viterbi will not always be the same.
-
-    My guess is that I will need to add Baum-Welch to this workflow to allow for me to estimate the state in a
-    non-random way.  See the Durbin book as well as some of the online tutorials for baum-welch.
-    """
+def hmm_viterbi_new(gmm_params, data, A_trans, pi, stat='xpehh'):
     # some initializations and settings
     n = len(data)
-    mu_n = params['mu'][params['state'] == 'neutral'].tolist()
-    mu_p = params['mu'][params['state'] == 'sweep'].tolist()
-    sd_n = params['sd'][params['state'] == 'neutral'].tolist()
-    sd_p = params['sd'][params['state'] == 'sweep'].tolist()
-    pi_n = params['pi'][params['state'] == 'neutral'].tolist()[0]
-    pi_p = params['pi'][params['state'] == 'sweep'].tolist()[0]
+    A_new = A_trans
 
-    # Probability density values for the data using distribution 1
-    bx1_temp = hmm_norm_pdf(x=data, mu=mu_n[0], sd=sd_n[0])
-    for i in range(1, len(mu_n)):
-        bx1_temp = np.append(bx1_temp, hmm_norm_pdf(x=data, mu=mu_n[i], sd=sd_n[i]), axis=1)
-    bx1 = np.max(bx1_temp, axis=1)
+    classes = gmm_params['class'].unique()
+    # create a collection of lists that can be used to store intermediate values
+    bx = {}
+    p = {}
+    for x in range(len(classes)):
+        bx[x] = []
+        p[x] = []
 
-    # Probability density values for the data using distribution 2
-    bx2_temp = hmm_norm_pdf(x=data, mu=mu_p[0], sd=sd_p[0])
-    for i in range(1, len(mu_p)):
-        bx2_temp = np.append(bx2_temp, hmm_norm_pdf(x=data, mu=mu_p[i], sd=sd_p[i]), axis=1)
-    bx2 = np.max(bx2_temp, axis=1)
+    """ build the matrix of pdf values for each class [may want to make this its own function] """
+    for c in range(len(classes)):
+        # extract the path to the correct gmm based on the stat and the class
+        gmm_current_path = gmm_params['gmm_path'][(gmm_params['stat'] == stat) &
+                                                  (gmm_params['class'] == classes[c])].reset_index(drop=True)
+        # load the correct gmm based on the correct path
+        gmm = hmm_pickle_load(gmm_current_path.loc[0])  # required to ensure that the gmm model is extracted from the df
+        # extract the components, mean, covariances, and weights for the current gmm
+        components = gmm.n_components
+        mu = gmm.means_
+        cov = gmm.covariances_
+        wgt = gmm.weights_
+        for k in range(components):
+            if k == 0:  # initialize the bx vector
+                bx_temp = hmm_norm_pdf(x=data, mu=mu[k], sd=cov[k] ** 0.5) * wgt[k]
+            else:
+                bx_temp = np.append(bx_temp, hmm_norm_pdf(x=data, mu=mu[k], sd=cov[k] ** 0.5) * wgt[k], axis=0)
+        bx[c].append(np.sum(bx_temp, axis=0).tolist())
+    # the bx matrix is the matrix of pdf's for each stat and class. It is organized in the same manner as the
+    # gmm_params df. Therefore, each row of bx_matrix pertains to the same specific stat and class as that of the
+    # same row in gmm_params.
 
-    p_n = []  # list to hold the log probs of being in state H
-    p_p = []  # list to hold the log probs of being in state L
+    # p_n  and p_p replaced with the p dictionary
+    # p_n = []  # list to hold the log probs of being in state H
+    # p_p = []  # list to hold the log probs of being in state L
     # take the log of all the Viterbi required properties
-    bx1 = np.log(bx1)
-    bx2 = np.log(bx2)
+    for c in range(len(classes)):
+        bx[c] = np.log(bx[c])
+        pi[c] = np.log(pi[c])
     A_trans = np.log(A_trans)
-    pi_n = np.log(pi_n)
-    pi_p = np.log(pi_p)
 
-    for i in range(n):
-        if i == 0:
-            # The first element (0th position)
-            p_n.append(pi_n + bx1[i])
-            p_p.append(pi_p + bx2[i])
-        else:
-            # The second element
-            # H[datat[i]] is going to be equal to the probability of data[i] given state neutral (so, bx1)
-            p_n.append(bx1[i] + np.maximum(p_n[i - 1] + A_trans[0, 0], p_p[i - 1] + A_trans[1, 0]))
-            p_p.append(bx2[i] + np.maximum(p_p[i - 1] + A_trans[1, 1], p_n[i - 1] + A_trans[0, 1]))
+    # initiate the sequence for each class at the 0th index
+    for c in range(len(classes)):
+        p[c].append(pi[c] + bx[c][0][0])
+
+    for t in range(1, n):
+        for ci in range(len(classes)):
+            for cj in range(len(classes)):
+                # p_n.append(bx1[i] + np.maximum(p_n[i - 1] + A_trans[0, 0], p_p[i - 1] + A_trans[1, 0]))
+                # p_p.append(bx2[i] + np.maximum(p_p[i - 1] + A_trans[1, 1], p_n[i - 1] + A_trans[0, 1]))
+                # not right below, need to figure out how to handle the offset A matrix and classes
+                p[ci].append(bx[ci][0][t] + np.maximum(p[ci][t-1], p[cj][t-1]))
 
     p_zip = np.array([p_p, p_n])
     # return the index of the max value in each column which corresponds to states 0, 1, ...
@@ -748,6 +748,7 @@ bwd_ll_new, beta_new = hmm_backward_new(gmm_params, data, A_trans, pi)
 z, gamma = hmm_gamma_new(alpha=alpha_new, beta=beta_new, n=len(data))
 pi = hmm_update_pi_new(z)
 A_trans = hmm_update_trans_new(z)
+v_path = hmm_viterbi_new(gmm_params, data, A_trans, pi, stat='xpehh')
 
 
 # print(fwd_ll_old)
