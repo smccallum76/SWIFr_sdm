@@ -531,18 +531,33 @@ def hmm_update_trans(z):
     return A_trans
 
 def hmm_update_trans_new(z):
-    # concept is based on shifting the columns
+    """
+    This method uses a colum shift coupled with an element wise addition to update the transition matrix. If there
+    exist 3 classes then the A matrix is 3x3. Therefore, a total of 9 shifts and addition operations are needed.
+    The general workflow is as follows:
+    1. Set up a loop to iterate through the transition matrix [i, j].
+    2. The initial iteration will be at i=j or position 0,0.
+    3. This results in the z[0] column first being shifted and then being added.
+    4. The summation results in a value of 2 whenever the current state and the next state are the same (sunny to sunny)
+    5. Counting the number of 2's in the column represents the number of transitions from one state to the next.
+    6. At the next iteration of the loop i=0 and j=1, we are performing the same operation, but now the count of 2's
+    represents the number of times we transitioned from state i=0 to state j=1.
+    """
     class_count = len(z)
-    A = np.empty(shape=(class_count, class_count))
-
+    a = np.empty(shape=(class_count, class_count))
     for i in range(class_count):
         for j in range(class_count):
             temp = z[i][0:-1] + z[j][1::]
-            A[i, j] = len([k for k in temp if k == 2])
+            a[i, j] = len([k for k in temp if k == 2])
 
-    A = A / len(z[0])
-
-    return A
+    # normalize the 'a' matrix based on the total number of elements
+    """
+    THIS NORMALIZATION IS WRONG! Need to adjust the denominator such that I divide by the number of times we were
+    in the given state (or something like this). The transition matrix should sum to 1 in all cases. 
+    """
+    x = np.sum(a, axis=1) # axis 1 is correct, we want to sum from left to right across the columns
+    # a = a / np.sum(a, axis=0)
+    return a
 
 def hmm_viterbi(params, data, A_trans):
     # some initializations and settings
