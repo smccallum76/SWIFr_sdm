@@ -531,7 +531,7 @@ def hmm_update_trans(z):
     return A_trans
 
 def hmm_update_trans_new(z):
-
+    # concept is based on shifting the columns
     class_count = len(z)
     A = np.empty(shape=(class_count, class_count))
 
