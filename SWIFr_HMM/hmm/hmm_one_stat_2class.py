@@ -550,16 +550,71 @@ def hmm_update_trans_new(z):
             temp = z[i][0:-1] + z[j][1::]
             a[i, j] = len([k for k in temp if k == 2])
 
-    # normalize the 'a' matrix based on the total number of elements
-    """
-    THIS NORMALIZATION IS WRONG! Need to adjust the denominator such that I divide by the number of times we were
-    in the given state (or something like this). The transition matrix should sum to 1 in all cases. 
-    """
-    x = np.sum(a, axis=1) # axis 1 is correct, we want to sum from left to right across the columns
-    # a = a / np.sum(a, axis=0)
+    # normalize the 'a' matrix based on the total count of occurrences in each state
+    a_sum = np.sum(a, axis=1) # axis 1 is correct, we want to sum from left to right across the columns
+    a = a / a_sum.reshape((len(a_sum), 1))
     return a
 
 def hmm_viterbi(params, data, A_trans):
+    # some initializations and settings
+    n = len(data)
+    mu_n = params['mu'][params['state'] == 'neutral'].tolist()
+    mu_p = params['mu'][params['state'] == 'sweep'].tolist()
+    sd_n = params['sd'][params['state'] == 'neutral'].tolist()
+    sd_p = params['sd'][params['state'] == 'sweep'].tolist()
+    pi_n = params['pi'][params['state'] == 'neutral'].tolist()[0]
+    pi_p = params['pi'][params['state'] == 'sweep'].tolist()[0]
+
+    # Probability density values for the data using distribution 1
+    bx1_temp = hmm_norm_pdf(x=data, mu=mu_n[0], sd=sd_n[0])
+    for i in range(1, len(mu_n)):
+        bx1_temp = np.append(bx1_temp, hmm_norm_pdf(x=data, mu=mu_n[i], sd=sd_n[i]), axis=1)
+    bx1 = np.max(bx1_temp, axis=1)
+
+    # Probability density values for the data using distribution 2
+    bx2_temp = hmm_norm_pdf(x=data, mu=mu_p[0], sd=sd_p[0])
+    for i in range(1, len(mu_p)):
+        bx2_temp = np.append(bx2_temp, hmm_norm_pdf(x=data, mu=mu_p[i], sd=sd_p[i]), axis=1)
+    bx2 = np.max(bx2_temp, axis=1)
+
+    p_n = []  # list to hold the log probs of being in state H
+    p_p = []  # list to hold the log probs of being in state L
+    # take the log of all the Viterbi required properties
+    bx1 = np.log(bx1)
+    bx2 = np.log(bx2)
+    A_trans = np.log(A_trans)
+    pi_n = np.log(pi_n)
+    pi_p = np.log(pi_p)
+
+    for i in range(n):
+        if i == 0:
+            # The first element (0th position)
+            p_n.append(pi_n + bx1[i])
+            p_p.append(pi_p + bx2[i])
+        else:
+            # The second element
+            # H[datat[i]] is going to be equal to the probability of data[i] given state neutral (so, bx1)
+            p_n.append(bx1[i] + np.maximum(p_n[i - 1] + A_trans[0, 0], p_p[i - 1] + A_trans[1, 0]))
+            p_p.append(bx2[i] + np.maximum(p_p[i - 1] + A_trans[1, 1], p_n[i - 1] + A_trans[0, 1]))
+
+    p_zip = np.array([p_p, p_n])
+    # return the index of the max value in each column which corresponds to states 0, 1, ...
+    # note that in the event of a tie the first index is returned. However, in a real situation a tie would be extremely
+    # unlikely.
+    path = np.argmax(p_zip, axis=0)
+
+    return path
+
+def hmm_viterbi_new(params, data, A_trans):
+    """
+    This function has not been updated. I believe that I will need to use a different method to calculate Z than the
+    current 'gamma' method. This is b/c using gamma to calculate z inserts a random component into the class assignment.
+    This results in slight variability in the A_trans (transition) matrix, which in turn means that the path defined
+    by Viterbi will not always be the same.
+
+    My guess is that I will need to add Baum-Welch to this workflow to allow for me to estimate the state in a
+    non-random way.  See the Durbin book as well as some of the online tutorials for baum-welch.
+    """
     # some initializations and settings
     n = len(data)
     mu_n = params['mu'][params['state'] == 'neutral'].tolist()
