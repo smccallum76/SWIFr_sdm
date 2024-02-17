@@ -530,6 +530,24 @@ def hmm_update_trans(z):
     A_trans[1, 1] = 1 - A_trans[1, 0]
     return A_trans
 
+def hmm_update_trans_new(z):
+
+    class_count = len(z)
+    # indicator function for the transition matrix
+    z1_stay = 0
+    z1_arrive = 0
+    for i in range(0, len(z) - 1):
+        if (z[i] == 1) and (z[i + 1] == 1):
+            z1_stay += 1
+        if (z[i] == 0) and (z[i + 1] == 1):
+            z1_arrive += 1
+    # update of transition matrix using the indicator function
+    A_trans[0, 0] = z1_stay / sum(z)
+    A_trans[0, 1] = 1 - A_trans[0, 0]
+    A_trans[1, 0] = z1_arrive / len(z[z == 0])
+    A_trans[1, 1] = 1 - A_trans[1, 0]
+    return A_trans
+
 def hmm_viterbi(params, data, A_trans):
     # some initializations and settings
     n = len(data)
@@ -655,14 +673,15 @@ a_list = [0.999, 0.001, 1, 0]  # transition matrix in a00, a01, a10, a11 format
 A_trans = hmm_init_trans(a_list=a_list)
 pi = [0.9999, 0.0001]  # state probabilities for neutral and sweep
 
-bwd_ll_old, beta_old = hmm_backward(data, A_trans, pi)
-fwd_ll_old, alpha_old = hmm_forward(data, A_trans, pi)
+# bwd_ll_old, beta_old = hmm_backward(data, A_trans, pi)
+# fwd_ll_old, alpha_old = hmm_forward(data, A_trans, pi)
 
 fwd_ll_new, alpha_new = hmm_forward_new(gmm_params, data, A_trans, pi)
 bwd_ll_new, beta_new = hmm_backward_new(gmm_params, data, A_trans, pi)
 # z_old, gamma_old = hmm_gamma(alpha=alpha_old, beta=beta_old, n=len(data))
 z, gamma = hmm_gamma_new(alpha=alpha_new, beta=beta_new, n=len(data))
 pi = hmm_update_pi_new(z)
+A_trans = hmm_update_trans_new(z)
 
 
 # print(fwd_ll_old)
@@ -671,7 +690,11 @@ pi = hmm_update_pi_new(z)
 print(bwd_ll_new)
 print(fwd_ll_new)
 print('done')
-
+"""
+Go here for a python implementation of HMM. This can be used to compare output and timing of my method vs 
+another:
+https://hmmlearn.readthedocs.io/en/stable/tutorial.html
+"""
 
 '''
 The setup below is kind of problematic, but can be worked out later. For now, just ensure that the mu list contains
