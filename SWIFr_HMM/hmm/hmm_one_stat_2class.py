@@ -653,7 +653,7 @@ def hmm_viterbi_new(gmm_params, data, A_trans, pi, stat='xpehh'):
             for cj in range(len(classes)):
                 # p_n.append(bx1[i] + np.maximum(p_n[i - 1] + A_trans[0, 0], p_p[i - 1] + A_trans[1, 0]))
                 # p_p.append(bx2[i] + np.maximum(p_p[i - 1] + A_trans[1, 1], p_n[i - 1] + A_trans[0, 1]))
-                # not right below, need to figure out how to handle the offset A matrix and classes
+                # not right below, need to figure out how to handle the offset A matrix and classes.
                 p[ci].append(bx[ci][0][t] + np.maximum(p[ci][t-1], p[cj][t-1]))
 
     p_zip = np.array([p_p, p_n])
