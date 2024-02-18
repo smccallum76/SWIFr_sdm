@@ -505,6 +505,7 @@ def hmm_update_pi_new(z):
     for c in range(class_count):
         pi_update.append(len(z[c][z[c] == 1]) / len(z[c]))
 
+    pi_update = [1e-4 if x == 0 else x for x in pi_update]  # do not allow any value to be 0
     return pi_update
 
 def hmm_update_trans(z):
@@ -547,7 +548,8 @@ def hmm_update_trans_new(z):
     a_sum = np.sum(a, axis=1) # axis 1 is correct, we want to sum from left to right across the columns
     a = a / a_sum.reshape((len(a_sum), 1))
     # replace any zero values with an extremely small number to prevent div by zero wanting
-    a[a == 0] = 1e-16
+    a[a == 0] = 1e-4
+    # a[a == np.nan] = 1e-4
     return a
 
 def hmm_viterbi(data, A_trans, pi):
@@ -712,41 +714,44 @@ def hmm_init_params2(path):
 
 """ Path to data and params from GMM """
 stat = 'ihs_afr_std'  # fst is problematic
-swifr_path = '../../swifr_pkg/test_data/simulations_4_swifr_2class/'
-data_path = '../../swifr_pkg/test_data/simulations_4_swifr_test_2class/test/test'
+# swifr_path = '../../swifr_pkg/test_data/simulations_4_swifr_2class/'
+# data_path = '../../swifr_pkg/test_data/simulations_4_swifr_test_2class/test/test'
+swifr_path = '../../swifr_pkg/test_data/simulations_4_swifr/'
+data_path = '../../swifr_pkg/test_data/simulations_4_swifr_test/test/test'
 gmm_params = hmm_init_params2(swifr_path)
 gmm_params = gmm_params[gmm_params['stat'] == stat].reset_index(drop=True)  # limit to one stat for now
 # s_means = gmm_params.loc[0, 'gmm']
 
 """ Path to data and data load (external for now) """
 # this will need to be a 'get' function, but keep it external for now
-data_orig = pd.read_table('../../swifr_pkg/test_data/simulations_4_swifr_test_2class/test/test', sep='\t')
+data_orig = pd.read_table(data_path, sep='\t')
 # data_labels = pd.DataFrame(data_orig['label'], columns=['label'])
 # convert the row labels from a string to a numeric value
 conditions = [
-            data_orig['label'] == 'neutral',
-            data_orig['label'] == 'link_left',
-            data_orig['label'] == 'link_right',
-            data_orig['label'] == 'sweep'
+            data_orig['label'] == 'neutral',  # 0
+            data_orig['label'] == 'link_left',  # 2
+            data_orig['label'] == 'link_right',  # 2
+            data_orig['label'] == 'sweep'  # 1
             ]
-choices = [0, 0, 0, 1]
+choices = [0, 2, 2, 1]
 data_orig['label_num'] = np.select(conditions, choices, default=-998)
 
 # for dev, just use stat at a time
 data = data_orig[stat][data_orig[stat] != -998].reset_index(drop=True)
 true_labels = data_orig[data_orig[stat] != -998].reset_index(drop=True)
-# cut_point = 60000
-# data = data.iloc[0:cut_point]
-# true_labels = true_labels.iloc[0:cut_point]
+cut_point = 60000
+data = data.iloc[0:cut_point]
+true_labels = true_labels.iloc[0:cut_point]
 
 # initialize the transition matrix, hard coded for now, but will need to  adjust to calculate from the data
 # ensure (for now) that the order of transitions matches the
-a_list = [0.999, 0.001, 1 - 1e-16, 1e-16]  # transition matrix in a00, a01, a10, a11 format
+# a_list = [0.999, 0.001, 1 - 1e-16, 1e-16]  # transition matrix in a00, a01, a10, a11 format
+a_list = [0.998, 1e-4, 0.002-1e-4,   1e-4, 1e-4, 1-2*1e-4,   0.01, 0.09, 0.9]
 A_trans = hmm_init_trans(a_list=a_list)
-pi = [0.9999, 0.0001]  # state probabilities for neutral and sweep
+pi = [0.98, 0.001, 0.019]  # state probabilities for neutral and sweep
 
 # the lines below represent a run block for a single stat. This would be repeated for all stats
-for i in range(3):
+for i in range(5):
     print(i)
     fwd_ll_new, alpha_new = hmm_forward_new(gmm_params, data, A_trans, pi, stat=stat)
     bwd_ll_new, beta_new = hmm_backward_new(gmm_params, data, A_trans, pi, stat=stat)
@@ -764,6 +769,7 @@ pi = np.exp(pi)
 
 true_labels['pred_class'] = v_path
 sweeps = true_labels[true_labels['label'] == 'sweep']
+links = true_labels[true_labels['label_num'] == 2]
 
 plt.figure(figsize=(10, 10))
 plt.hist(data, density=True, bins=75, color='black', alpha=0.2, label='Data')
@@ -777,7 +783,7 @@ path_actual = true_labels['label_num']
 path_pred = v_path
 
 cm = confusion_matrix(path_actual, path_pred)
-disp = ConfusionMatrixDisplay(cm, display_labels=['Neutral', 'Sweep'])
+disp = ConfusionMatrixDisplay(cm, display_labels=['Neutral', 'Sweep', 'Link'])
 disp.plot()
 plt.show()
 
