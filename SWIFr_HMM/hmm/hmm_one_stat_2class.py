@@ -546,6 +546,8 @@ def hmm_update_trans_new(z):
     # normalize the 'a' matrix based on the total count of occurrences in each state
     a_sum = np.sum(a, axis=1) # axis 1 is correct, we want to sum from left to right across the columns
     a = a / a_sum.reshape((len(a_sum), 1))
+    # replace any zero values with an extremely small number to prevent div by zero wanting
+    a[a == 0] = 1e-16
     return a
 
 def hmm_viterbi(data, A_trans, pi):
@@ -610,7 +612,7 @@ def hmm_viterbi(data, A_trans, pi):
 
     return path
 
-def hmm_viterbi_new(gmm_params, data, a, pi, stat='xpehh'):
+def hmm_viterbi_new(gmm_params, data, a, pi_viterbi, stat='xpehh'):
     # some initializations and settings
     n = len(data)
     classes = gmm_params['class'].unique()
@@ -639,12 +641,12 @@ def hmm_viterbi_new(gmm_params, data, a, pi, stat='xpehh'):
     # take the log of all the Viterbi required properties
     for c in range(len(classes)):
         bx[c] = np.log(bx[c])
-        pi[c] = np.log(pi[c])
+        pi_viterbi[c] = np.log(pi_viterbi[c])
     a = np.log(a)
 
     # initiate the sequence for each class at the 0th index
     for c in range(len(classes)):
-        p[c, 0] = pi[c] + bx[c][0]
+        p[c, 0] = pi_viterbi[c] + bx[c][0]
 
     for t in range(1, n):
         for ci in range(len(classes)):
@@ -709,116 +711,78 @@ def hmm_init_params2(path):
     return df
 
 """ Path to data and params from GMM """
+stat = 'ihs_afr_std'  # fst is problematic
 swifr_path = '../../swifr_pkg/test_data/simulations_4_swifr_2class/'
 data_path = '../../swifr_pkg/test_data/simulations_4_swifr_test_2class/test/test'
 gmm_params = hmm_init_params2(swifr_path)
-gmm_params = gmm_params[gmm_params['stat'] == 'xpehh'].reset_index(drop=True)  # limit to one stat for now
-
+gmm_params = gmm_params[gmm_params['stat'] == stat].reset_index(drop=True)  # limit to one stat for now
 # s_means = gmm_params.loc[0, 'gmm']
 
 """ Path to data and data load (external for now) """
 # this will need to be a 'get' function, but keep it external for now
 data_orig = pd.read_table('../../swifr_pkg/test_data/simulations_4_swifr_test_2class/test/test', sep='\t')
-# for dev, just use xpehh
-data = data_orig['xpehh'][data_orig['xpehh'] != -998].reset_index(drop=True)
-data = data.iloc[0:30000]
+# data_labels = pd.DataFrame(data_orig['label'], columns=['label'])
+# convert the row labels from a string to a numeric value
+conditions = [
+            data_orig['label'] == 'neutral',
+            data_orig['label'] == 'link_left',
+            data_orig['label'] == 'link_right',
+            data_orig['label'] == 'sweep'
+            ]
+choices = [0, 0, 0, 1]
+data_orig['label_num'] = np.select(conditions, choices, default=-998)
+
+# for dev, just use stat at a time
+data = data_orig[stat][data_orig[stat] != -998].reset_index(drop=True)
+true_labels = data_orig[data_orig[stat] != -998].reset_index(drop=True)
+# cut_point = 60000
+# data = data.iloc[0:cut_point]
+# true_labels = true_labels.iloc[0:cut_point]
 
 # initialize the transition matrix, hard coded for now, but will need to  adjust to calculate from the data
 # ensure (for now) that the order of transitions matches the
-a_list = [0.999, 0.001, 1, 0]  # transition matrix in a00, a01, a10, a11 format
+a_list = [0.999, 0.001, 1 - 1e-16, 1e-16]  # transition matrix in a00, a01, a10, a11 format
 A_trans = hmm_init_trans(a_list=a_list)
 pi = [0.9999, 0.0001]  # state probabilities for neutral and sweep
 
-# bwd_ll_old, beta_old = hmm_backward(data, A_trans, pi)
-# fwd_ll_old, alpha_old = hmm_forward(data, A_trans, pi)
-fwd_ll_new, alpha_new = hmm_forward_new(gmm_params, data, A_trans, pi)
-bwd_ll_new, beta_new = hmm_backward_new(gmm_params, data, A_trans, pi)
-# z_old, gamma_old = hmm_gamma(alpha=alpha_old, beta=beta_old, n=len(data))
-z, gamma = hmm_gamma_new(alpha=alpha_new, beta=beta_new, n=len(data))
-pi = hmm_update_pi_new(z)
-A_trans = hmm_update_trans_new(z)
-v_path_old = hmm_viterbi(data, A_trans, pi)
-v_path = hmm_viterbi_new(gmm_params, data, A_trans, pi, stat='xpehh')
+# the lines below represent a run block for a single stat. This would be repeated for all stats
+for i in range(3):
+    print(i)
+    fwd_ll_new, alpha_new = hmm_forward_new(gmm_params, data, A_trans, pi, stat=stat)
+    bwd_ll_new, beta_new = hmm_backward_new(gmm_params, data, A_trans, pi, stat=stat)
+    z, gamma = hmm_gamma_new(alpha=alpha_new, beta=beta_new, n=len(data))
+    pi = hmm_update_pi_new(z)
+    A_trans = hmm_update_trans_new(z)
+    print("Pi: ", pi)
+    print("A: ", A_trans)
 
-print(np.sum(v_path - v_path_old))
+v_path = hmm_viterbi_new(gmm_params, data, a=A_trans, pi_viterbi=pi, stat=stat)
+# the line be is stupid, but I can't figure out why the hmm_viterbi_new function insists on reassigning pi
+# as the np.log of pi. I have changed the variable names, it doesn't happen with the transition matrix and is
+# possibly due to running all of these function in the same program.  For now, leave the line below in
+pi = np.exp(pi)
 
-print('done')
-"""
-Go here for a python implementation of HMM. This can be used to compare output and timing of my method vs 
-another:
-https://hmmlearn.readthedocs.io/en/stable/tutorial.html
-"""
+true_labels['pred_class'] = v_path
+sweeps = true_labels[true_labels['label'] == 'sweep']
 
-'''
-The setup below is kind of problematic, but can be worked out later. For now, just ensure that the mu list contains
-every mean for all of the neutral and sweep events (same for the sd list). This allows for multiple mu entries for
-(say) a neutral signature that might be characterized by multiple modes (same for sweeps).  However, you must be sure
-that the 'state_list' contains the correct labels for the mu and sd entries (order matters).
-'''
-# mu and sd values pulled directly from the simple sim generator assuming the params would be known
-# mu_n = [1, 4]  # mean for neutral state normal distribution
-# sd_n = [1, 1]  # sd for neutral state normal distribution
-# mu_p = [7, 10]  # mean for positive state normal distribution
-# sd_p = [1, 1]  # sd for positive state normal distribution
-# state_n = ['neutral' for i in range(len(mu_n))]
-# state_p = ['sweep' for i in range(len(mu_p))]
-# pi_n = [pi_temp for i in range(len(mu_n))]
-# pi_p = [1-pi_temp for i in range(len(mu_p))]
+plt.figure(figsize=(10, 10))
+plt.hist(data, density=True, bins=75, color='black', alpha=0.2, label='Data')
+plt.legend(loc='upper left')
+plt.xlabel('values')
+plt.ylabel('density')
+plt.show()
 
-# mu_list = mu_n + mu_p  # mean of each normal distribution
-# sd_list = sd_n + sd_p  # std deviation of each normal distribution
-# pi_list = pi_n + pi_p  # fraction of neutral and sweep events
-# state_list = state_n + state_p  # clas labels for each mu and sd entry
-# ''' Parameter setup ends here...needs work'''
-# a_list = [0.95, 0.05, 0.2, 0.8]  # transition matrix in a00, a01, a10, a11 format
-#
-# params = hmm_init_params(mu_list=mu_list, sd_list=sd_list, pi_list=pi_list, state_list=state_list)
-# A_trans = hmm_init_trans(a_list=a_list)
-#
-# fwd, alpha = hmm_forward(params=params, data=data, A_trans=A_trans)
-# bwd, beta = hmm_backward(params=params, data=data, A_trans=A_trans)
-# z, gamma = hmm_gamma(alpha=alpha, beta=beta, n=len(data))
-# pi1_new, pi2_new = hmm_update_pi(z, gamma)
-# A_trans = hmm_update_trans(z)
-# # find the most likely path using the Viterbi algorithm
-# path_viterbi = hmm_viterbi(params=params, data=data, A_trans=A_trans)
-#
-# ''' PLOT THE DATA '''
-# path_pred = z
-# print(A_trans)
-# print(params)
-# print('pi1 after update: ', round(pi1_new, 3), ' | pi2 after update: ', round(pi2_new, 3))
-#
-# plt.figure(figsize=(10, 10))
-# plt.hist(data, density=True, bins=75, color='black', alpha=0.2, label='Data')
-# plt.legend(loc='upper left')
-# plt.xlabel('values')
-# plt.ylabel('density')
-# plt.show()
-#
-# ''' CONFUSION MATRIX '''
-# cm = confusion_matrix(path_actual, path_pred)
-# disp = ConfusionMatrixDisplay(cm, display_labels=['Sweep', 'Neutral'])
-# disp.plot()
-# plt.show()
-#
-# ''' CONFUSION MATRIX '''
-# cm = confusion_matrix(path_actual, path_viterbi)
-# disp = ConfusionMatrixDisplay(cm, display_labels=['Sweep', 'Neutral'])
-# disp.plot()
-# plt.show()
+''' CONFUSION MATRIX '''
+path_actual = true_labels['label_num']
+path_pred = v_path
 
-"""
-Notes and next steps:
-- The script does a nice job of identifying the params of the two normal distributions
-- I will need to think about how to add flexibility for multiple distributions
-- I will need to add burn-in and lag
-- I need to review the steps as was done for SWIFr (create a graphical review of the mechanics)
-- I will likely need to convert from stochastic EM to Baum-Welch
-- I will need to think about how to combine more than one column of data (e.g., this script simulates Fst, but I need
-to combine Fst, XP-EHH, DDAF, iHS). 
+cm = confusion_matrix(path_actual, path_pred)
+disp = ConfusionMatrixDisplay(cm, display_labels=['Neutral', 'Sweep'])
+disp.plot()
+plt.show()
 
-"""
+
+
 
 
 
