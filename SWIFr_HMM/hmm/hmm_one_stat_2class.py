@@ -610,19 +610,14 @@ def hmm_viterbi(data, A_trans, pi):
 
     return path
 
-def hmm_viterbi_new(gmm_params, data, A_trans, pi, stat='xpehh'):
+def hmm_viterbi_new(gmm_params, data, a, pi, stat='xpehh'):
     # some initializations and settings
     n = len(data)
-    A_new = A_trans
-
     classes = gmm_params['class'].unique()
-    # create a collection of lists that can be used to store intermediate values
-    bx = {}
-    p = np.empty(shape=(len(classes), len(data)))
-    for x in range(len(classes)):
-        bx[x] = []
+    p = np.empty(shape=(len(classes), n))
+    bx = np.empty(shape=(len(classes), n))
 
-    """ build the matrix of pdf values for each class [may want to make this its own function] """
+    """ build the matrix of pdf values for each class [may want to make this its own function - DO THIS] """
     for c in range(len(classes)):
         # extract the path to the correct gmm based on the stat and the class
         gmm_current_path = gmm_params['gmm_path'][(gmm_params['stat'] == stat) &
@@ -639,31 +634,30 @@ def hmm_viterbi_new(gmm_params, data, A_trans, pi, stat='xpehh'):
                 bx_temp = hmm_norm_pdf(x=data, mu=mu[k], sd=cov[k] ** 0.5) * wgt[k]
             else:
                 bx_temp = np.append(bx_temp, hmm_norm_pdf(x=data, mu=mu[k], sd=cov[k] ** 0.5) * wgt[k], axis=0)
-        bx[c].append(np.sum(bx_temp, axis=0).tolist())
+        bx[c] = np.sum(bx_temp, axis=0)
 
     # take the log of all the Viterbi required properties
     for c in range(len(classes)):
         bx[c] = np.log(bx[c])
         pi[c] = np.log(pi[c])
-    A_trans = np.log(A_trans)
+    a = np.log(a)
 
     # initiate the sequence for each class at the 0th index
     for c in range(len(classes)):
-        p[c, 0] = pi[c] + bx[c][0][0]
+        p[c, 0] = pi[c] + bx[c][0]
 
     for t in range(1, n):
         for ci in range(len(classes)):
+            temp = []
             for cj in range(len(classes)):
-                if ci == cj:  # this scenario results in an np.maximum argument that is equal
-                    continue
-                else:
-                    p[ci, t] = bx[ci][0][t] + np.maximum(p[ci][t - 1] + A_trans[ci, ci], p[cj][t - 1] + A_trans[cj, ci])
-
-    # return the index of the max value in each column which corresponds to states 0, 1, ...
+                # temp hold the values intermediate values that evaluate the probability of being in the current
+                # class when considering all possible transitions to this class.
+                temp.append(p[cj][t - 1] + a[cj, ci])
+            p[ci, t] = bx[ci][t] + np.max(temp)
+    # return the index of the max value in each row which corresponds the classes in the same order as 'classes'
     # note that in the event of a tie the first index is returned. However, in a real situation a tie would be extremely
     # unlikely.
     path = np.argmax(p, axis=0)
-
     return path
 
 def hmm_get_swifr_classes(path):
@@ -743,8 +737,10 @@ bwd_ll_new, beta_new = hmm_backward_new(gmm_params, data, A_trans, pi)
 z, gamma = hmm_gamma_new(alpha=alpha_new, beta=beta_new, n=len(data))
 pi = hmm_update_pi_new(z)
 A_trans = hmm_update_trans_new(z)
-# v_path_old = hmm_viterbi(data, A_trans, pi)
+v_path_old = hmm_viterbi(data, A_trans, pi)
 v_path = hmm_viterbi_new(gmm_params, data, A_trans, pi, stat='xpehh')
+
+print(np.sum(v_path - v_path_old))
 
 print('done')
 """
