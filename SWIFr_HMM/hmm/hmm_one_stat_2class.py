@@ -103,8 +103,6 @@ def hmm_forward(data, A_trans, pi):
     pi_n = pi[0]
     pi_p = pi[1]
 
-
-
     # Probability density values for the data using distribution 1
     """
     [see sync notes 10/24/2023]
@@ -550,27 +548,39 @@ def hmm_update_trans_new(z):
     a = a / a_sum.reshape((len(a_sum), 1))
     return a
 
-def hmm_viterbi(params, data, A_trans):
+def hmm_viterbi(data, A_trans, pi):
     # some initializations and settings
     n = len(data)
-    mu_n = params['mu'][params['state'] == 'neutral'].tolist()
-    mu_p = params['mu'][params['state'] == 'sweep'].tolist()
-    sd_n = params['sd'][params['state'] == 'neutral'].tolist()
-    sd_p = params['sd'][params['state'] == 'sweep'].tolist()
-    pi_n = params['pi'][params['state'] == 'neutral'].tolist()[0]
-    pi_p = params['pi'][params['state'] == 'sweep'].tolist()[0]
+    # mu_n = params['mu'][params['state'] == 'neutral'].tolist()
+    # mu_p = params['mu'][params['state'] == 'sweep'].tolist()
+    # sd_n = params['sd'][params['state'] == 'neutral'].tolist()
+    # sd_p = params['sd'][params['state'] == 'sweep'].tolist()
+    # pi_n = params['pi'][params['state'] == 'neutral'].tolist()[0]
+    # pi_p = params['pi'][params['state'] == 'sweep'].tolist()[0]
 
-    # Probability density values for the data using distribution 1
-    bx1_temp = hmm_norm_pdf(x=data, mu=mu_n[0], sd=sd_n[0])
+    mu_n = [-1.21758821, -0.75719649]
+    mu_p = [0.39927606]
+    sd_n = [0.12109503**0.5, 0.08834092**0.5]  # needs to be sqr root
+    sd_p = [0.37233887**0.5]
+    wgt_n = [0.42728606, 0.57271394]
+    wgt_p = [1]
+    pi_n = pi[0]
+    pi_p = pi[1]
+
+    bx1_temp = hmm_norm_pdf(x=data, mu=mu_n[0], sd=sd_n[0]) * wgt_n[0]
     for i in range(1, len(mu_n)):
-        bx1_temp = np.append(bx1_temp, hmm_norm_pdf(x=data, mu=mu_n[i], sd=sd_n[i]), axis=1)
-    bx1 = np.max(bx1_temp, axis=1)
+        temp1 = hmm_norm_pdf(x=data, mu=mu_n[i], sd=sd_n[i]) * wgt_n[i]
+        bx1_temp = np.append(bx1_temp, temp1, axis=0)
+    bx1_temp = bx1_temp.reshape((len(data), len(mu_n)), order='F')
+    bx1 = np.sum(bx1_temp, axis=1)
 
     # Probability density values for the data using distribution 2
-    bx2_temp = hmm_norm_pdf(x=data, mu=mu_p[0], sd=sd_p[0])
+    bx2_temp = hmm_norm_pdf(x=data, mu=mu_p[0], sd=sd_p[0]) * wgt_p[0]
     for i in range(1, len(mu_p)):
-        bx2_temp = np.append(bx2_temp, hmm_norm_pdf(x=data, mu=mu_p[i], sd=sd_p[i]), axis=1)
-    bx2 = np.max(bx2_temp, axis=1)
+        temp1 = hmm_norm_pdf(x=data, mu=mu_n[i], sd=sd_n[i]) * wgt_p[i]
+        bx2_temp = np.append(bx2_temp, temp1, axis=0)
+    bx2_temp = bx2_temp.reshape((len(data), len(mu_p)), order='F')
+    bx2 = np.sum(bx2_temp, axis=1)
 
     p_n = []  # list to hold the log probs of being in state H
     p_p = []  # list to hold the log probs of being in state L
@@ -592,7 +602,7 @@ def hmm_viterbi(params, data, A_trans):
             p_n.append(bx1[i] + np.maximum(p_n[i - 1] + A_trans[0, 0], p_p[i - 1] + A_trans[1, 0]))
             p_p.append(bx2[i] + np.maximum(p_p[i - 1] + A_trans[1, 1], p_n[i - 1] + A_trans[0, 1]))
 
-    p_zip = np.array([p_p, p_n])
+    p_zip = np.array([p_n, p_p])
     # return the index of the max value in each column which corresponds to states 0, 1, ...
     # note that in the event of a tie the first index is returned. However, in a real situation a tie would be extremely
     # unlikely.
@@ -608,10 +618,9 @@ def hmm_viterbi_new(gmm_params, data, A_trans, pi, stat='xpehh'):
     classes = gmm_params['class'].unique()
     # create a collection of lists that can be used to store intermediate values
     bx = {}
-    p = {}
+    p = np.empty(shape=(len(classes), len(data)))
     for x in range(len(classes)):
         bx[x] = []
-        p[x] = []
 
     """ build the matrix of pdf values for each class [may want to make this its own function] """
     for c in range(len(classes)):
@@ -631,13 +640,7 @@ def hmm_viterbi_new(gmm_params, data, A_trans, pi, stat='xpehh'):
             else:
                 bx_temp = np.append(bx_temp, hmm_norm_pdf(x=data, mu=mu[k], sd=cov[k] ** 0.5) * wgt[k], axis=0)
         bx[c].append(np.sum(bx_temp, axis=0).tolist())
-    # the bx matrix is the matrix of pdf's for each stat and class. It is organized in the same manner as the
-    # gmm_params df. Therefore, each row of bx_matrix pertains to the same specific stat and class as that of the
-    # same row in gmm_params.
 
-    # p_n  and p_p replaced with the p dictionary
-    # p_n = []  # list to hold the log probs of being in state H
-    # p_p = []  # list to hold the log probs of being in state L
     # take the log of all the Viterbi required properties
     for c in range(len(classes)):
         bx[c] = np.log(bx[c])
@@ -646,21 +649,20 @@ def hmm_viterbi_new(gmm_params, data, A_trans, pi, stat='xpehh'):
 
     # initiate the sequence for each class at the 0th index
     for c in range(len(classes)):
-        p[c].append(pi[c] + bx[c][0][0])
+        p[c, 0] = pi[c] + bx[c][0][0]
 
     for t in range(1, n):
         for ci in range(len(classes)):
             for cj in range(len(classes)):
-                # p_n.append(bx1[i] + np.maximum(p_n[i - 1] + A_trans[0, 0], p_p[i - 1] + A_trans[1, 0]))
-                # p_p.append(bx2[i] + np.maximum(p_p[i - 1] + A_trans[1, 1], p_n[i - 1] + A_trans[0, 1]))
-                # not right below, need to figure out how to handle the offset A matrix and classes.
-                p[ci].append(bx[ci][0][t] + np.maximum(p[ci][t-1], p[cj][t-1]))
+                if ci == cj:  # this scenario results in an np.maximum argument that is equal
+                    continue
+                else:
+                    p[ci, t] = bx[ci][0][t] + np.maximum(p[ci][t - 1] + A_trans[ci, ci], p[cj][t - 1] + A_trans[cj, ci])
 
-    p_zip = np.array([p_p, p_n])
     # return the index of the max value in each column which corresponds to states 0, 1, ...
     # note that in the event of a tie the first index is returned. However, in a real situation a tie would be extremely
     # unlikely.
-    path = np.argmax(p_zip, axis=0)
+    path = np.argmax(p, axis=0)
 
     return path
 
@@ -726,12 +728,6 @@ data_orig = pd.read_table('../../swifr_pkg/test_data/simulations_4_swifr_test_2c
 # for dev, just use xpehh
 data = data_orig['xpehh'][data_orig['xpehh'] != -998].reset_index(drop=True)
 data = data.iloc[0:30000]
-# data = np.array(data['xpehh']).reshape((len(data), 1))  # not sure if I need to convert to numpy, don't if not needed
-
-# s_means = g_sweep.means_
-# s_cov = g_sweep.covariances_
-# s_wgt = g_sweep.weights_
-
 
 # initialize the transition matrix, hard coded for now, but will need to  adjust to calculate from the data
 # ensure (for now) that the order of transitions matches the
@@ -741,21 +737,15 @@ pi = [0.9999, 0.0001]  # state probabilities for neutral and sweep
 
 # bwd_ll_old, beta_old = hmm_backward(data, A_trans, pi)
 # fwd_ll_old, alpha_old = hmm_forward(data, A_trans, pi)
-
 fwd_ll_new, alpha_new = hmm_forward_new(gmm_params, data, A_trans, pi)
 bwd_ll_new, beta_new = hmm_backward_new(gmm_params, data, A_trans, pi)
 # z_old, gamma_old = hmm_gamma(alpha=alpha_old, beta=beta_old, n=len(data))
 z, gamma = hmm_gamma_new(alpha=alpha_new, beta=beta_new, n=len(data))
 pi = hmm_update_pi_new(z)
 A_trans = hmm_update_trans_new(z)
+# v_path_old = hmm_viterbi(data, A_trans, pi)
 v_path = hmm_viterbi_new(gmm_params, data, A_trans, pi, stat='xpehh')
 
-
-# print(fwd_ll_old)
-# print(bwd_ll_old)
-
-print(bwd_ll_new)
-print(fwd_ll_new)
 print('done')
 """
 Go here for a python implementation of HMM. This can be used to compare output and timing of my method vs 
