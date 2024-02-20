@@ -714,10 +714,10 @@ def hmm_init_params2(path):
 
 """ Path to data and params from GMM """
 stat = 'ihs_afr_std'  # fst is problematic
-# swifr_path = '../../swifr_pkg/test_data/simulations_4_swifr_2class/'
-# data_path = '../../swifr_pkg/test_data/simulations_4_swifr_test_2class/test/test'
-swifr_path = '../../swifr_pkg/test_data/simulations_4_swifr/'
-data_path = '../../swifr_pkg/test_data/simulations_4_swifr_test/test/test'
+swifr_path = '../../swifr_pkg/test_data/simulations_4_swifr_2class/'
+data_path = '../../swifr_pkg/test_data/simulations_4_swifr_test_2class/test/test'
+# swifr_path = '../../swifr_pkg/test_data/simulations_4_swifr/'
+# data_path = '../../swifr_pkg/test_data/simulations_4_swifr_test/test/test'
 gmm_params = hmm_init_params2(swifr_path)
 gmm_params = gmm_params[gmm_params['stat'] == stat].reset_index(drop=True)  # limit to one stat for now
 # s_means = gmm_params.loc[0, 'gmm']
@@ -733,7 +733,8 @@ conditions = [
             data_orig['label'] == 'link_right',  # 2
             data_orig['label'] == 'sweep'  # 1
             ]
-choices = [0, 2, 2, 1]
+# choices = [0, 2, 2, 1]  # 3 classes
+choices = [0, 0, 0, 1]  # 2 classes
 data_orig['label_num'] = np.select(conditions, choices, default=-998)
 
 # for dev, just use stat at a time
@@ -745,10 +746,11 @@ true_labels = true_labels.iloc[0:cut_point]
 
 # initialize the transition matrix, hard coded for now, but will need to  adjust to calculate from the data
 # ensure (for now) that the order of transitions matches the
-# a_list = [0.999, 0.001, 1 - 1e-16, 1e-16]  # transition matrix in a00, a01, a10, a11 format
-a_list = [0.998, 1e-4, 0.002-1e-4,   1e-4, 1e-4, 1-2*1e-4,   0.01, 0.09, 0.9]
+a_list = [0.999, 0.001, 1 - 1e-16, 1e-16]  # transition matrix in a00, a01, a10, a11 format
+# a_list = [0.998, 1e-4, 0.002-1e-4,   1e-4, 1e-4, 1-2*1e-4,   0.01, 0.09, 0.9]
 A_trans = hmm_init_trans(a_list=a_list)
-pi = [0.98, 0.001, 0.019]  # state probabilities for neutral and sweep
+pi = [0.999,  0.001]
+# pi = [0.98, 0.001, 0.019]  # state probabilities for neutral and sweep
 
 # the lines below represent a run block for a single stat. This would be repeated for all stats
 for i in range(5):
@@ -783,7 +785,7 @@ path_actual = true_labels['label_num']
 path_pred = v_path
 
 cm = confusion_matrix(path_actual, path_pred)
-disp = ConfusionMatrixDisplay(cm, display_labels=['Neutral', 'Sweep', 'Link'])
+disp = ConfusionMatrixDisplay(cm, display_labels=['Neutral', 'Sweep'])
 disp.plot()
 plt.show()
 
