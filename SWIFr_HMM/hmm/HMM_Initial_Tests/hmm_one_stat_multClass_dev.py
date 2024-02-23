@@ -716,8 +716,8 @@ def hmm_init_params2(path):
 stat = 'ihs_afr_std'  # fst is problematic
 # swifr_path = '../../swifr_pkg/test_data/simulations_4_swifr_2class/'
 # data_path = '../../swifr_pkg/test_data/simulations_4_swifr_test_2class/test/test'
-swifr_path = '../../swifr_pkg/test_data/simulations_4_swifr/'
-data_path = '../../swifr_pkg/test_data/simulations_4_swifr_test/test/test'
+swifr_path = '../../../swifr_pkg/test_data/simulations_4_swifr/'
+data_path = '../../../swifr_pkg/test_data/simulations_4_swifr_test/test/test'
 gmm_params = hmm_init_params2(swifr_path)
 gmm_params = gmm_params[gmm_params['stat'] == stat].reset_index(drop=True)  # limit to one stat for now
 # s_means = gmm_params.loc[0, 'gmm']

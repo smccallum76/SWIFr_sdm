@@ -353,7 +353,7 @@ def hmm_init_params2(path):
     return df
 
 """ Path to data and params from GMM """
-swifr_path = '../../swifr_pkg/test_data/simulations_4_swifr_2class/'
+swifr_path = '../../../swifr_pkg/test_data/simulations_4_swifr_2class/'
 data_path = '../../swifr_pkg/test_data/simulations_4_swifr_test_2class/test/test'
 gmm_params = hmm_init_params2(swifr_path)
 # for dev, just use xpehh
