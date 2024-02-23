@@ -74,8 +74,8 @@ def hmm_define_trans(data, label):
             temp = z[i] + z[j].shift(periods=-1)
             class_count = len(temp[temp == 2])
             # the conditional below prevents zero entries in the transition matrix (which are problematic)
-            if class_count <= 3:
-                class_count = 3
+            if class_count < 1:
+                class_count = 1
             a[i, j] = class_count
 
     # normalize the 'a' matrix based on the total count of occurrences in each state
