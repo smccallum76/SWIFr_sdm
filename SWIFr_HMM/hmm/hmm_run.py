@@ -1,27 +1,44 @@
 import hmm_funcs as hmm
 import numpy as np
-import pandas as pd
-from sklearn import mixture
 import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix,  ConfusionMatrixDisplay
 from sklearn.preprocessing import LabelBinarizer
-from sklearn.metrics import RocCurveDisplay, roc_curve, roc_auc_score
+from sklearn.metrics import roc_curve, roc_auc_score
 
-""" Path to data and params from GMM """
+""" 
+---------------------------------------------------------------------------------------------------
+Path to data
+---------------------------------------------------------------------------------------------------
+"""
 stat = 'xpehh'  # fst is problematic
-# swifr_path = '../../swifr_pkg/test_data/simulations_4_swifr_2class/'
+# gmm_path = '../../swifr_pkg/test_data/simulations_4_swifr_2class/'
 # data_path = '../../swifr_pkg/test_data/simulations_4_swifr_test_2class/test/test'
-swifr_path = '../../swifr_pkg/test_data/simulations_4_swifr/'
+gmm_path = '../../swifr_pkg/test_data/simulations_4_swifr/'
 data_path = '../../swifr_pkg/test_data/simulations_4_swifr_test/test/test'
-gmm_params = hmm.hmm_init_params(swifr_path)
+swifr_path = '../../swifr_pkg/test_data/simulations_4_swifr_test/test/test_classified'
+""" 
+---------------------------------------------------------------------------------------------------
+Load the GMM params from SWIFr_train
+---------------------------------------------------------------------------------------------------
+"""
+gmm_params = hmm.hmm_init_params(gmm_path)
 gmm_params = gmm_params[gmm_params['stat'] == stat].reset_index(drop=True)  # limit to one stat for now
 
-""" Path to data and data load (external for now) """
+""" 
+---------------------------------------------------------------------------------------------------
+Load the test data and the data classified by SWIFr GMM
+---------------------------------------------------------------------------------------------------
+"""
 # this will need to be a 'get' function, but keep it external for now
-data_orig = pd.read_table(data_path, sep='\t')
+data_orig = hmm.hmm_get_data(data_path)
 # import swifr data that has been classified using gmm
-swfr_classified = pd.read_table(data_path + '_classified', sep='\t')
-# data_labels = pd.DataFrame(data_orig['label'], columns=['label'])
+swfr_classified = hmm.hmm_get_data(swifr_path)
+
+""" 
+---------------------------------------------------------------------------------------------------
+Labels to Numbers -- This is temporary and used to simplify link_left and link_right to link
+---------------------------------------------------------------------------------------------------
+"""
 # convert the row labels from a string to a numeric value
 conditions = [
             data_orig['label'] == 'neutral',  # 0
@@ -32,7 +49,6 @@ conditions = [
 choices = [0, 2, 2, 1]  # 3 classes
 # choices = [0, 0, 0, 1]  # 2 classes
 data_orig['label_num'] = np.select(conditions, choices, default=-998)
-
 conditions = [
             swfr_classified['label'] == 'neutral',  # 0
             swfr_classified['label'] == 'link_left',  # 2
@@ -42,57 +58,64 @@ conditions = [
 choices = [0, 2, 2, 1]  # 3 classes
 # choices = [0, 0, 0, 1]  # 2 classes
 swfr_classified['label_num'] = np.select(conditions, choices, default=-998)
+
+""" 
+---------------------------------------------------------------------------------------------------
+Initiate Pi and the transition matrix based on the data labels
+---------------------------------------------------------------------------------------------------
+"""
 # for now I will define the pi vector using the label_num, but this is only b/c the data labels are not a match
 # with the hmm classes (e.g., link_left and link_right are being defined as link)
 pi, class_check = hmm.hmm_define_pi(data_orig, 'label_num')
 A_trans = hmm.hmm_define_trans(data_orig, 'label_num')
 
+""" 
+---------------------------------------------------------------------------------------------------
+Cutting the data to a smaller frame for dev purposes
+---------------------------------------------------------------------------------------------------
+"""
+cut_point = 60000
 # for dev, just use stat at a time
 data = data_orig[stat][data_orig[stat] != -998].reset_index(drop=True)
 true_labels = data_orig[data_orig[stat] != -998].reset_index(drop=True)
-cut_point = 60000
+
 data = data.iloc[0:cut_point]
 true_labels = true_labels.iloc[0:cut_point]
 
-
+""" 
+---------------------------------------------------------------------------------------------------
+HMM - Forward, Backward, Gamma, and Viterbi
+---------------------------------------------------------------------------------------------------
+"""
 # the lines below represent a run block for a single stat. This would be repeated for all stats
 fwd_ll_new, alpha_new = hmm.hmm_forward(gmm_params, data, A_trans, pi, stat=stat)
 bwd_ll_new, beta_new = hmm.hmm_backward(gmm_params, data, A_trans, pi, stat=stat)
 z, gamma = hmm.hmm_gamma(alpha=alpha_new, beta=beta_new, n=len(data))
 # pi = hmm.hmm_update_pi(z)
 # A_trans = hmm.hmm_update_trans(z)
-print("Pi: ", pi)
-print("Pi sum: ", np.sum(pi))
-print("A: ", A_trans)
-print("A sum: ", np.sum(A_trans, axis=1))
-
-
 v_path = hmm.hmm_viterbi(gmm_params, data, a=A_trans, pi_viterbi=pi, stat=stat)
 pi = np.exp(pi)
-print("Pi: ", pi)
-print("Pi sum: ", np.sum(pi))
-print("A: ", A_trans)
-print("A sum: ", np.sum(A_trans, axis=1))
-
-
+# add the predicted viterbi path to the true labels for comparison (need to also add gamma/prob for each class)
 true_labels['pred_class'] = v_path
-class_num = str(len(pi))
-true_labels.to_csv('output/' + class_num + '_classes_' + stat + '_predictions.csv', index=False)
 
-sweeps = true_labels[true_labels['label'] == 'sweep']
-links = true_labels[true_labels['label_num'] == 2]
-
-''' Histogram '''
+""" 
+---------------------------------------------------------------------------------------------------
+Histogram - need to make a function
+---------------------------------------------------------------------------------------------------
+"""
 plt.figure(figsize=(12, 6))
-plt.hist(data, density=True, bins=75, color='black', alpha=0.2, label=stat)
+plt.hist(data, density=True, bins=75, color='dodgerblue', alpha=0.6, label=stat)
 plt.legend(loc='upper left')
 plt.xlabel('values')
 plt.ylabel('density')
 plt.title(stat + ' Distribution')
 plt.show()
 
-''' CONFUSION MATRIX '''
-
+""" 
+---------------------------------------------------------------------------------------------------
+Confusion Matrix
+---------------------------------------------------------------------------------------------------
+"""
 path_actual = true_labels['label_num']
 path_pred = v_path
 
@@ -111,7 +134,11 @@ ConfusionMatrixDisplay(confusion_matrix=cm2, display_labels=target_names).plot(
 fig.tight_layout()
 plt.show()
 
-''' ROC '''
+""" 
+---------------------------------------------------------------------------------------------------
+ROC - need to make this a function
+---------------------------------------------------------------------------------------------------
+"""
 label_binarizer = LabelBinarizer().fit(true_labels['label_num'])
 # y_onehot_test will be 3 columns of dummy vars with a 1 in the true instance
 # y_onehot_test are the true classes, which we will compare with the gamma values

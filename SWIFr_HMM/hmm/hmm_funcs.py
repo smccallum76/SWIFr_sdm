@@ -9,6 +9,9 @@ import scipy.stats as stats
 import pickle
 import os
 
+def hmm_get_data(path, sep='\t'):
+    data = pd.read_table(path, sep=sep)
+    return data
 
 def hmm_init_params(path):
     """
