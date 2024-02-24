@@ -54,17 +54,17 @@ cut_point = 60000
 data = data.iloc[0:cut_point]
 true_labels = true_labels.iloc[0:cut_point]
 
-for i in range(5):
-    # the lines below represent a run block for a single stat. This would be repeated for all stats
-    fwd_ll_new, alpha_new = hmm.hmm_forward(gmm_params, data, A_trans, pi, stat=stat)
-    bwd_ll_new, beta_new = hmm.hmm_backward(gmm_params, data, A_trans, pi, stat=stat)
-    z, gamma = hmm.hmm_gamma(alpha=alpha_new, beta=beta_new, n=len(data))
-    pi = hmm.hmm_update_pi(z)
-    A_trans = hmm.hmm_update_trans(z)
-    print("Pi: ", pi)
-    print("Pi sum: ", np.sum(pi))
-    print("A: ", A_trans)
-    print("A sum: ", np.sum(A_trans, axis=1))
+
+# the lines below represent a run block for a single stat. This would be repeated for all stats
+fwd_ll_new, alpha_new = hmm.hmm_forward(gmm_params, data, A_trans, pi, stat=stat)
+bwd_ll_new, beta_new = hmm.hmm_backward(gmm_params, data, A_trans, pi, stat=stat)
+z, gamma = hmm.hmm_gamma(alpha=alpha_new, beta=beta_new, n=len(data))
+# pi = hmm.hmm_update_pi(z)
+# A_trans = hmm.hmm_update_trans(z)
+print("Pi: ", pi)
+print("Pi sum: ", np.sum(pi))
+print("A: ", A_trans)
+print("A sum: ", np.sum(A_trans, axis=1))
 
 
 v_path = hmm.hmm_viterbi(gmm_params, data, a=A_trans, pi_viterbi=pi, stat=stat)
