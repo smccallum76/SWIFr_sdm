@@ -47,23 +47,26 @@ swfr_classified['label_num'] = np.select(conditions, choices, default=-998)
 pi, class_check = hmm.hmm_define_pi(data_orig, 'label_num')
 A_trans = hmm.hmm_define_trans(data_orig, 'label_num')
 
-# the transition matrix below results in an identification of 7/9 of the sweep events for ihs_afr_std (3 classes).
-# need to retain this matrix as it will be important in the grid search.
-# a_list = [0.998, 1e-4, 0.002-1e-4,   1e-4, 1e-4, 1-2*1e-4,   0.01, 0.09, 0.9]
-# A_trans = hmm.hmm_init_trans(a_list=a_list)
-
 # for dev, just use stat at a time
 data = data_orig[stat][data_orig[stat] != -998].reset_index(drop=True)
 true_labels = data_orig[data_orig[stat] != -998].reset_index(drop=True)
-# cut_point = 60000
-# data = data.iloc[0:cut_point]
-# true_labels = true_labels.iloc[0:cut_point]
+cut_point = 60000
+data = data.iloc[0:cut_point]
+true_labels = true_labels.iloc[0:cut_point]
+
+for i in range(5):
+    # the lines below represent a run block for a single stat. This would be repeated for all stats
+    fwd_ll_new, alpha_new = hmm.hmm_forward(gmm_params, data, A_trans, pi, stat=stat)
+    bwd_ll_new, beta_new = hmm.hmm_backward(gmm_params, data, A_trans, pi, stat=stat)
+    z, gamma = hmm.hmm_gamma(alpha=alpha_new, beta=beta_new, n=len(data))
+    pi = hmm.hmm_update_pi(z)
+    A_trans = hmm.hmm_update_trans(z)
+    print("Pi: ", pi)
+    print("Pi sum: ", np.sum(pi))
+    print("A: ", A_trans)
+    print("A sum: ", np.sum(A_trans, axis=1))
 
 
-# the lines below represent a run block for a single stat. This would be repeated for all stats
-fwd_ll_new, alpha_new = hmm.hmm_forward(gmm_params, data, A_trans, pi, stat=stat)
-bwd_ll_new, beta_new = hmm.hmm_backward(gmm_params, data, A_trans, pi, stat=stat)
-z, gamma = hmm.hmm_gamma(alpha=alpha_new, beta=beta_new, n=len(data))
 v_path = hmm.hmm_viterbi(gmm_params, data, a=A_trans, pi_viterbi=pi, stat=stat)
 pi = np.exp(pi)
 print("Pi: ", pi)
@@ -118,12 +121,13 @@ label_binarizer2 = LabelBinarizer().fit(swfr_classified['label_num'])
 y_onehot_test2 = label_binarizer.transform(swfr_classified['label_num'])
 
 # roc curve calculates the roc values for a specific comparison
-fpr0, tpr0, thresh0 = roc_curve(y_onehot_test[:, 0], np.transpose(gamma[0][:]), pos_label=1)
-fpr1, tpr1, thresh1 = roc_curve(y_onehot_test[:, 1], np.transpose(gamma[1][:]), pos_label=1)
-fpr2, tpr2, thresh2 = roc_curve(y_onehot_test[:, 2], np.transpose(gamma[2][:]), pos_label=1)
-auc0 = roc_auc_score(y_onehot_test[:, 0], np.transpose(gamma[0][:]))
-auc1 = roc_auc_score(y_onehot_test[:, 1], np.transpose(gamma[1][:]))
-auc2 = roc_auc_score(y_onehot_test[:, 2], np.transpose(gamma[2][:]))
+
+fpr0, tpr0, thresh0 = roc_curve(y_onehot_test[:, 0], np.transpose(gamma[0]), pos_label=1)
+fpr1, tpr1, thresh1 = roc_curve(y_onehot_test[:, 1], np.transpose(gamma[1]), pos_label=1)
+fpr2, tpr2, thresh2 = roc_curve(y_onehot_test[:, 2], np.transpose(gamma[2]), pos_label=1)
+auc0 = roc_auc_score(y_onehot_test[:, 0], np.transpose(gamma[0]))
+auc1 = roc_auc_score(y_onehot_test[:, 1], np.transpose(gamma[1]))
+auc2 = roc_auc_score(y_onehot_test[:, 2], np.transpose(gamma[2]))
 
 fpr3, tpr3, thresh3 = roc_curve(y_onehot_test2[:, 0], swfr_classified['P(neutral)'], pos_label=1)
 fpr4, tpr4, thresh4 = roc_curve(y_onehot_test2[:, 1], swfr_classified['P(sweep)'], pos_label=1)

@@ -308,14 +308,11 @@ def hmm_gamma(alpha, beta, n):
     gamma2 = np.exp(log_gamma2)
     gamma3 = 1 - (gamma1 + gamma2)
     """
-    """ Build a dictionary to hold the gamma values """
+    """ Build a np arrays to hold the gamma values """
     # The number of classes will always be equal to the length of alpha or beta (alpha is used)
     class_count = len(alpha)
-    gamma = {}
-    z = {}
-    for x in range(class_count):
-        gamma[x] = []
-        z[x] = np.zeros(n)
+    gamma = np.empty(shape=(class_count, n))
+    z = np.empty(shape=(class_count, n))
 
     """ Temp list to hold the sum of each alpha and beta vector and then define the max gamma value"""
     temp = []
@@ -338,12 +335,17 @@ def hmm_gamma(alpha, beta, n):
     # a value of 1 if z_draw happens to be less than both z[class1] and z[class2].
     z_draw = np.random.uniform(low=0, high=1, size=n)
     z_sum = np.zeros(n)  # z_sum is used to ensure that only one class is assigned a value of 1
-    for c in range(class_count):
-        z[c][z_draw <= gamma[c][0]] = 1
+    for c in range(class_count-1):
+        z[c][z_draw <= gamma[c]] = 1
         # z_sum should never exceed 1, but if it does then set the z[c] values the occurrence to 0. Technically this
         # set up will favor the first class to be assigned a 1, but
         z_sum = z_sum + z[c]
         z[c][z_sum > 1] = 0
+    # the last class if assigned a value of 1 where all other classes are zero
+    z[class_count-1] = np.where(np.sum(z, axis=0) == 0, 1, 0)
+    # it is still possible, due to the random draw, for all classes to be assigned a value of zero. z_check is used
+    # to identify this scenario and randomly pick a class to assign a value of 1
+    z_check = np.sum(np.sum(z, axis=0))
 
     return z, gamma
 
@@ -352,9 +354,11 @@ def hmm_update_pi(z):
     class_count = len(z)
     pi_update = []
     for c in range(class_count):
-        pi_update.append(len(z[c][z[c] == 1]) / len(z[c]))
-
-    pi_update = [1e-4 if x == 0 else x for x in pi_update]  # do not allow any value to be 0
+        z_count = np.sum(z[c])
+        check = len(z[c])
+        if z_count < 1:
+            z_count = 1
+        pi_update.append(z_count / len(z[c]))
     return pi_update
 
 
@@ -376,7 +380,10 @@ def hmm_update_trans(z):
     for i in range(class_count):
         for j in range(class_count):
             temp = z[i][0:-1] + z[j][1::]
-            a[i, j] = len([k for k in temp if k == 2])
+            trans_count = len([k for k in temp if k == 2])
+            if trans_count < 1:
+                trans_count = 1
+            a[i, j] = trans_count
 
     # normalize the 'a' matrix based on the total count of occurrences in each state
     a_sum = np.sum(a, axis=1) # axis 1 is correct, we want to sum from left to right across the columns
