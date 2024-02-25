@@ -10,7 +10,7 @@ from sklearn.metrics import roc_curve, roc_auc_score
 Path to data
 ---------------------------------------------------------------------------------------------------
 """
-stat = 'xpehh'  # fst is problematic
+stat = 'ihs_afr_std'  # fst is problematic
 # gmm_path = '../../swifr_pkg/test_data/simulations_4_swifr_2class/'
 # data_path = '../../swifr_pkg/test_data/simulations_4_swifr_test_2class/test/test'
 gmm_path = '../../swifr_pkg/test_data/simulations_4_swifr/'
@@ -49,6 +49,8 @@ conditions = [
 choices = [0, 2, 2, 1]  # 3 classes
 # choices = [0, 0, 0, 1]  # 2 classes
 data_orig['label_num'] = np.select(conditions, choices, default=-998)
+
+# repeat the above, but for the swfr_classified (could tech use the same since the indexing is the same)
 conditions = [
             swfr_classified['label'] == 'neutral',  # 0
             swfr_classified['label'] == 'link_left',  # 2
@@ -61,7 +63,7 @@ swfr_classified['label_num'] = np.select(conditions, choices, default=-998)
 
 """ 
 ---------------------------------------------------------------------------------------------------
-Initiate Pi and the transition matrix based on the data labels
+Initiate Pi and the transition matrix
 ---------------------------------------------------------------------------------------------------
 """
 # for now I will define the pi vector using the label_num, but this is only b/c the data labels are not a match
@@ -74,13 +76,13 @@ A_trans = hmm.hmm_define_trans(data_orig, 'label_num')
 Cutting the data to a smaller frame for dev purposes
 ---------------------------------------------------------------------------------------------------
 """
-cut_point = 60000
+cut_point = 60000  # set to zero if all data is to be used
 # for dev, just use stat at a time
 data = data_orig[stat][data_orig[stat] != -998].reset_index(drop=True)
 true_labels = data_orig[data_orig[stat] != -998].reset_index(drop=True)
-
-data = data.iloc[0:cut_point]
-true_labels = true_labels.iloc[0:cut_point]
+if cut_point > 0:
+    data = data.iloc[0:cut_point]
+    true_labels = true_labels.iloc[0:cut_point]
 
 """ 
 ---------------------------------------------------------------------------------------------------
@@ -113,7 +115,7 @@ plt.show()
 
 """ 
 ---------------------------------------------------------------------------------------------------
-Confusion Matrix
+Confusion Matrix - need to make a function
 ---------------------------------------------------------------------------------------------------
 """
 path_actual = true_labels['label_num']
@@ -136,7 +138,7 @@ plt.show()
 
 """ 
 ---------------------------------------------------------------------------------------------------
-ROC - need to make this a function
+ROC - need to make a function [macro averaging]
 ---------------------------------------------------------------------------------------------------
 """
 label_binarizer = LabelBinarizer().fit(true_labels['label_num'])
@@ -147,36 +149,39 @@ y_onehot_test = label_binarizer.transform(true_labels['label_num'])
 label_binarizer2 = LabelBinarizer().fit(swfr_classified['label_num'])
 y_onehot_test2 = label_binarizer.transform(swfr_classified['label_num'])
 
-# roc curve calculates the roc values for a specific comparison
-
+# Calculate false pos rate, true pos rate, and threshold for the HMM ROC curves
 fpr0, tpr0, thresh0 = roc_curve(y_onehot_test[:, 0], np.transpose(gamma[0]), pos_label=1)
 fpr1, tpr1, thresh1 = roc_curve(y_onehot_test[:, 1], np.transpose(gamma[1]), pos_label=1)
 fpr2, tpr2, thresh2 = roc_curve(y_onehot_test[:, 2], np.transpose(gamma[2]), pos_label=1)
+# Calculate the area under the curve for the HMM ROC curves
 auc0 = roc_auc_score(y_onehot_test[:, 0], np.transpose(gamma[0]))
 auc1 = roc_auc_score(y_onehot_test[:, 1], np.transpose(gamma[1]))
 auc2 = roc_auc_score(y_onehot_test[:, 2], np.transpose(gamma[2]))
 
+# Calculate false pos rate, true pos rate, and threshold for the SWIFr ROC curves
 fpr3, tpr3, thresh3 = roc_curve(y_onehot_test2[:, 0], swfr_classified['P(neutral)'], pos_label=1)
 fpr4, tpr4, thresh4 = roc_curve(y_onehot_test2[:, 1], swfr_classified['P(sweep)'], pos_label=1)
 fpr5, tpr5, thresh5 = roc_curve(y_onehot_test2[:, 2], swfr_classified['P(link)'], pos_label=1)
+# Calculate the area under the curve for the SWIFr ROC curves
 auc3 = roc_auc_score(y_onehot_test2[:, 0], swfr_classified['P(neutral)'])
 auc4 = roc_auc_score(y_onehot_test2[:, 1], swfr_classified['P(sweep)'])
 auc5 = roc_auc_score(y_onehot_test2[:, 2], swfr_classified['P(link)'])
 
-plt.figure()
+plt.figure(figsize=(9, 7))
+# plot the HMM ROC Curves
 plt.plot(fpr0, tpr0, color='magenta',  label='HMM Neutral vs Rest (AUC) = ' + str(round(auc0, 2)))
 plt.plot(fpr1, tpr1, color='dodgerblue',  label='HMM Sweep vs Rest (AUC) = ' + str(round(auc1, 2)))
 plt.plot(fpr2, tpr2, color='darkviolet',  label='HMM Link vs Rest (AUC) = ' + str(round(auc2, 2)))
-
+# plot the SWIFr ROC Curves
 plt.plot(fpr3, tpr3, linestyle='dashed', color='magenta',  label='SWIFr Neutral vs Rest (AUC) = ' + str(round(auc3, 2)))
 plt.plot(fpr4, tpr4, linestyle='dashed', color='dodgerblue',  label='SWIFr Sweep vs Rest (AUC) = ' + str(round(auc4, 2)))
 plt.plot(fpr5, tpr5, linestyle='dashed', color='darkviolet',  label='SWIFr Link vs Rest (AUC) = ' + str(round(auc5, 2)))
-
+# plot the chance curve
 plt.plot(np.linspace(0, 1, 50 ), np.linspace(0, 1, 50), color='black',
          linestyle='dashed', label='Chance Level (AUC) = 0.50')
 plt.xlabel('False Positive Rate')
 plt.ylabel('True Positive Rate')
-plt.title(f'One-vs-Rest ROC curves [{stat}]')
+plt.title(f'One-vs-Rest ROC curves [{stat.upper()}]')
 plt.legend()
 plt.show()
 
