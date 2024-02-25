@@ -10,7 +10,7 @@ from sklearn.metrics import roc_curve, roc_auc_score
 Path to data
 ---------------------------------------------------------------------------------------------------
 """
-stat = 'ihs_afr_std'  # fst is problematic
+stat = 'xpehh'  # fst is problematic
 # gmm_path = '../../swifr_pkg/test_data/simulations_4_swifr_2class/'
 # data_path = '../../swifr_pkg/test_data/simulations_4_swifr_test_2class/test/test'
 gmm_path = '../../swifr_pkg/test_data/simulations_4_swifr/'
@@ -76,7 +76,7 @@ A_trans = hmm.hmm_define_trans(data_orig, 'label_num')
 Cutting the data to a smaller frame for dev purposes
 ---------------------------------------------------------------------------------------------------
 """
-cut_point = 60000  # set to zero if all data is to be used
+cut_point = 0  # set to zero if all data is to be used
 # for dev, just use stat at a time
 data = data_orig[stat][data_orig[stat] != -998].reset_index(drop=True)
 true_labels = data_orig[data_orig[stat] != -998].reset_index(drop=True)
@@ -130,9 +130,9 @@ cm2 = confusion_matrix(path_actual, path_pred)
 axs[0].set_title(stat + ' Normalized')
 axs[1].set_title(stat + ' Counts')
 ConfusionMatrixDisplay(confusion_matrix=cm1, display_labels=target_names).plot(
-    include_values=True, ax=axs[0], cmap='cool')
+    include_values=True, ax=axs[0], cmap='cividis')
 ConfusionMatrixDisplay(confusion_matrix=cm2, display_labels=target_names).plot(
-    include_values=True, ax=axs[1], cmap='cool')
+    include_values=True, ax=axs[1], cmap='cividis')
 fig.tight_layout()
 plt.show()
 
@@ -153,6 +153,9 @@ y_onehot_test2 = label_binarizer.transform(swfr_classified['label_num'])
 # Unique classes
 classes = gmm_params['class'].unique()
 
+gamma_flat = gamma.ravel(order='C')
+one_hot_flat = y_onehot_test.ravel(order='F')
+
 # initialize figure
 plt.figure(figsize=(9, 7))
 for i in range(len(classes)):  # HMM ROC Curve Loop
@@ -165,6 +168,8 @@ for i in range(len(classes)):  # SWIFr ROC Curve Loop
     fpr, tpr, thresh = roc_curve(y_onehot_test2[:, i], swfr_classified[swfr_name], pos_label=1)
     auc = roc_auc_score(y_onehot_test2[:, i], swfr_classified[swfr_name])
     plt.plot(fpr, tpr, linestyle='dashed', color=colors[i], label=f'SWIFr {classes[i]} vs Rest (AUC) = ' + str(round(auc, 2)))
+
+
 
 # plot the chance curve
 plt.plot(np.linspace(0, 1, 50 ), np.linspace(0, 1, 50), color='black',
@@ -180,3 +185,25 @@ plt.show()
 ROC - need to make a function [micro averaging] ... follow format above, but use ravel
 ---------------------------------------------------------------------------------------------------
 """
+
+# micro averaging the HMM data
+plt.figure(figsize=(9, 7))
+fpr, tpr, thresh = roc_curve(y_onehot_test.ravel(order='F'), gamma.ravel(order='C'), pos_label=1)
+auc = roc_auc_score(y_onehot_test.ravel(order='F'), gamma.ravel(order='C'))
+plt.plot(fpr, tpr, color=colors[0], label='HMM One vs Rest (AUC) = ' + str(round(auc, 2)))
+
+# micro averaging the swifr data
+# flatten the swifr data by neutral, sweep, and link
+swfr_flat = swfr_classified[['P(neutral)', 'P(sweep)', 'P(link)']].to_numpy().flatten(order='f')
+fpr1, tpr1, thresh1 = roc_curve(y_onehot_test2.ravel(order='F'), swfr_flat, pos_label=1)
+auc1 = roc_auc_score(y_onehot_test2.ravel(order='F'), swfr_flat)
+plt.plot(fpr1, tpr1, linestyle='dashed', color=colors[0],
+         label='SWIFr One vs Rest (AUC) = ' + str(round(auc1, 2)))
+# chance curve
+plt.plot(np.linspace(0, 1, 50 ), np.linspace(0, 1, 50), color='black',
+         linestyle='dashed', label='Chance Level (AUC) = 0.50')
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title(f'One-vs-Rest ROC curves [{stat.upper()}]')
+plt.legend()
+plt.show()
