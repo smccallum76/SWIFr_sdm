@@ -13,7 +13,7 @@ Path to data
 """
 stat = 'ihs_afr_std'  # fst is problematic
 state_count = 3  # 3 states implies neutral, sweep, and link; 2 states implies neutral and sweep
-cut_point = 0  # set to zero if all data is to be used
+cut_point = 30000  # set to zero if all data is to be used
 
 if state_count == 2:
     gmm_path = '../../swifr_pkg/test_data/simulations_4_swifr_2class/'
