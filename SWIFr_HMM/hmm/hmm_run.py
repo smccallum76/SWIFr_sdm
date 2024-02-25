@@ -130,9 +130,9 @@ cm2 = confusion_matrix(path_actual, path_pred)
 axs[0].set_title(stat + ' Normalized')
 axs[1].set_title(stat + ' Counts')
 ConfusionMatrixDisplay(confusion_matrix=cm1, display_labels=target_names).plot(
-    include_values=True, ax=axs[0])
+    include_values=True, ax=axs[0], cmap='cool')
 ConfusionMatrixDisplay(confusion_matrix=cm2, display_labels=target_names).plot(
-    include_values=True, ax=axs[1])
+    include_values=True, ax=axs[1], cmap='cool')
 fig.tight_layout()
 plt.show()
 
@@ -141,41 +141,31 @@ plt.show()
 ROC - need to make a function [macro averaging]
 ---------------------------------------------------------------------------------------------------
 """
+colors = ['magenta', 'dodgerblue', 'darkviolet', 'blue']  # enough for four classes
+# dummy var for HMM
 label_binarizer = LabelBinarizer().fit(true_labels['label_num'])
 # y_onehot_test will be 3 columns of dummy vars with a 1 in the true instance
 # y_onehot_test are the true classes, which we will compare with the gamma values
 y_onehot_test = label_binarizer.transform(true_labels['label_num'])
-
+# dummy var for SWIFr
 label_binarizer2 = LabelBinarizer().fit(swfr_classified['label_num'])
 y_onehot_test2 = label_binarizer.transform(swfr_classified['label_num'])
+# Unique classes
+classes = gmm_params['class'].unique()
 
-# Calculate false pos rate, true pos rate, and threshold for the HMM ROC curves
-fpr0, tpr0, thresh0 = roc_curve(y_onehot_test[:, 0], np.transpose(gamma[0]), pos_label=1)
-fpr1, tpr1, thresh1 = roc_curve(y_onehot_test[:, 1], np.transpose(gamma[1]), pos_label=1)
-fpr2, tpr2, thresh2 = roc_curve(y_onehot_test[:, 2], np.transpose(gamma[2]), pos_label=1)
-# Calculate the area under the curve for the HMM ROC curves
-auc0 = roc_auc_score(y_onehot_test[:, 0], np.transpose(gamma[0]))
-auc1 = roc_auc_score(y_onehot_test[:, 1], np.transpose(gamma[1]))
-auc2 = roc_auc_score(y_onehot_test[:, 2], np.transpose(gamma[2]))
-
-# Calculate false pos rate, true pos rate, and threshold for the SWIFr ROC curves
-fpr3, tpr3, thresh3 = roc_curve(y_onehot_test2[:, 0], swfr_classified['P(neutral)'], pos_label=1)
-fpr4, tpr4, thresh4 = roc_curve(y_onehot_test2[:, 1], swfr_classified['P(sweep)'], pos_label=1)
-fpr5, tpr5, thresh5 = roc_curve(y_onehot_test2[:, 2], swfr_classified['P(link)'], pos_label=1)
-# Calculate the area under the curve for the SWIFr ROC curves
-auc3 = roc_auc_score(y_onehot_test2[:, 0], swfr_classified['P(neutral)'])
-auc4 = roc_auc_score(y_onehot_test2[:, 1], swfr_classified['P(sweep)'])
-auc5 = roc_auc_score(y_onehot_test2[:, 2], swfr_classified['P(link)'])
-
+# initialize figure
 plt.figure(figsize=(9, 7))
-# plot the HMM ROC Curves
-plt.plot(fpr0, tpr0, color='magenta',  label='HMM Neutral vs Rest (AUC) = ' + str(round(auc0, 2)))
-plt.plot(fpr1, tpr1, color='dodgerblue',  label='HMM Sweep vs Rest (AUC) = ' + str(round(auc1, 2)))
-plt.plot(fpr2, tpr2, color='darkviolet',  label='HMM Link vs Rest (AUC) = ' + str(round(auc2, 2)))
-# plot the SWIFr ROC Curves
-plt.plot(fpr3, tpr3, linestyle='dashed', color='magenta',  label='SWIFr Neutral vs Rest (AUC) = ' + str(round(auc3, 2)))
-plt.plot(fpr4, tpr4, linestyle='dashed', color='dodgerblue',  label='SWIFr Sweep vs Rest (AUC) = ' + str(round(auc4, 2)))
-plt.plot(fpr5, tpr5, linestyle='dashed', color='darkviolet',  label='SWIFr Link vs Rest (AUC) = ' + str(round(auc5, 2)))
+for i in range(len(classes)):  # HMM ROC Curve Loop
+    fpr, tpr, thresh = roc_curve(y_onehot_test[:, i], np.transpose(gamma[i]), pos_label=1)
+    auc = roc_auc_score(y_onehot_test[:, i], np.transpose(gamma[i]))
+    plt.plot(fpr, tpr, color=colors[i], label=f'HMM {classes[i]} vs Rest (AUC) = ' + str(round(auc, 2)))
+
+for i in range(len(classes)):  # SWIFr ROC Curve Loop
+    swfr_name = 'P(' + classes[i] + ')'
+    fpr, tpr, thresh = roc_curve(y_onehot_test2[:, i], swfr_classified[swfr_name], pos_label=1)
+    auc = roc_auc_score(y_onehot_test2[:, i], swfr_classified[swfr_name])
+    plt.plot(fpr, tpr, linestyle='dashed', color=colors[i], label=f'SWIFr {classes[i]} vs Rest (AUC) = ' + str(round(auc, 2)))
+
 # plot the chance curve
 plt.plot(np.linspace(0, 1, 50 ), np.linspace(0, 1, 50), color='black',
          linestyle='dashed', label='Chance Level (AUC) = 0.50')
@@ -185,4 +175,8 @@ plt.title(f'One-vs-Rest ROC curves [{stat.upper()}]')
 plt.legend()
 plt.show()
 
-print('done')
+""" 
+---------------------------------------------------------------------------------------------------
+ROC - need to make a function [micro averaging] ... follow format above, but use ravel
+---------------------------------------------------------------------------------------------------
+"""
