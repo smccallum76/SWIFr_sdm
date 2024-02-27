@@ -139,6 +139,19 @@ for c in classes:
     data_noNans[f"P({c}_All_avg)"] = avg_
     data_noNans[f"P({c}_All_max)"] = max_
 
+""" 
+---------------------------------------------------------------------------------------------------
+Predict the path based on the maximum average value
+---------------------------------------------------------------------------------------------------
+"""
+# col_temp will capture the columns defined above (which will have _All_avg in the name)
+col_temp = data_noNans.filter(regex=("P*_All_avg")).columns.tolist()
+idxmax = data_noNans[col_temp].idxmax(axis=1)
+for c in range(len(col_temp)):
+    idxmax = idxmax.replace(col_temp[c], c)
+
+data_noNans["pred_path"] = idxmax
+
 print('done')
 
 """ 
@@ -209,4 +222,25 @@ plt.xlabel('False Positive Rate')
 plt.ylabel('True Positive Rate')
 plt.title(f'Macro-Averaging, One-vs-Rest ROC curves [All Stats - MAX]')
 plt.legend()
+plt.show()
+
+""" 
+---------------------------------------------------------------------------------------------------
+Confusion Matrix - need to make a function
+---------------------------------------------------------------------------------------------------
+"""
+path_actual = data_noNans['label_num']
+path_pred = data_noNans['pred_path']
+
+fig, axs = plt.subplots(1,2, figsize=(14, 6))
+cm1 = confusion_matrix(path_actual, path_pred, normalize='true')
+cm2 = confusion_matrix(path_actual, path_pred)
+
+axs[0].set_title('Path using all stats - Normalized')
+axs[1].set_title('Path using all Stats - Counts')
+ConfusionMatrixDisplay(confusion_matrix=cm1, display_labels=classes).plot(
+    include_values=True, ax=axs[0], cmap='cividis')
+ConfusionMatrixDisplay(confusion_matrix=cm2, display_labels=classes).plot(
+    include_values=True, ax=axs[1], cmap='cividis')
+fig.tight_layout()
 plt.show()
