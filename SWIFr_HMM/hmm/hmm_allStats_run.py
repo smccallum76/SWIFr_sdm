@@ -12,7 +12,7 @@ Path to data
 ---------------------------------------------------------------------------------------------------
 """
 state_count = 4  # 3 states implies neutral, sweep, and link; 2 states implies neutral and sweep
-cut_point = 30000  # set to zero if all data is to be used
+cut_point = 15000  # set to zero if all data is to be used
 
 if state_count == 2:
     gmm_path = '../../swifr_pkg/test_data/simulations_4_swifr_2class/'
@@ -43,6 +43,10 @@ Load the test data and the data classified by SWIFr GMM
 # this will need to be a 'get' function, but keep it external for now
 data_orig = hmm.hmm_get_data(data_path).reset_index(drop=False)
 data_orig = data_orig.rename(columns={'index': 'idx_key'})  # this will be used for later merge
+# include only rows with all stats not nan
+# data_orig = data_orig[(data_orig['xpehh'] != -998) &
+#                         (data_orig['ihs_afr_std'] != -998) &
+#                         (data_orig['fst'] != -998)].reset_index(drop=False)
 # import swifr data that has been classified using gmm
 swfr_classified = hmm.hmm_get_data(swifr_path)
 
@@ -98,6 +102,7 @@ A_trans = hmm.hmm_define_trans(data_orig, 'label_num')
 Cutting the data to a smaller frame for dev purposes
 ---------------------------------------------------------------------------------------------------
 """
+stats = ['xpehh']  # overwriting the stats field for dev purposes
 for stat in stats:
     print(f'Running HMM on {stat}')
     # note that dropping nans one stat per loop implies results in a different set of data
