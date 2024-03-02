@@ -11,8 +11,8 @@ from sklearn.metrics import roc_curve, roc_auc_score
 Path to data
 ---------------------------------------------------------------------------------------------------
 """
-state_count = 3  # 3 states implies neutral, sweep, and link; 2 states implies neutral and sweep
-cut_point = 0  # set to zero if all data is to be used
+state_count = 4  # 3 states implies neutral, sweep, and link; 2 states implies neutral and sweep
+cut_point = 30000  # set to zero if all data is to be used
 
 if state_count == 2:
     gmm_path = '../../swifr_pkg/test_data/simulations_4_swifr_2class/'
@@ -22,6 +22,10 @@ elif state_count == 3:
     gmm_path = '../../swifr_pkg/test_data/simulations_4_swifr/'
     data_path = '../../swifr_pkg/test_data/simulations_4_swifr_test/test/test'
     swifr_path = '../../swifr_pkg/test_data/simulations_4_swifr_test/test/test_classified'
+elif state_count == 4:
+    gmm_path = '../../swifr_pkg/test_data/simulations_4_swifr_4class/'
+    data_path = '../../swifr_pkg/test_data/simulations_4_swifr_test_4class/test/test'
+    swifr_path = '../../swifr_pkg/test_data/simulations_4_swifr_test_4class/test/test_classified'
 """ 
 ---------------------------------------------------------------------------------------------------
 Load the GMM params from SWIFr_train
@@ -51,13 +55,15 @@ Labels to Numbers -- This is temporary and used to simplify link_left and link_r
 conditions = [
             data_orig['label'] == 'neutral',  # 0
             data_orig['label'] == 'link_left',  # 2
-            data_orig['label'] == 'link_right',  # 2
+            data_orig['label'] == 'link_right',  # 3
             data_orig['label'] == 'sweep'  # 1
             ]
 if state_count == 3:
     choices = [0, 2, 2, 1]  # 3 classes
 elif state_count == 2:
     choices = [0, 0, 0, 1]  # 2 classes
+elif state_count == 4:
+    choices = [0, 2, 3, 1]  # 2 classes
 
 data_orig['label_num'] = np.select(conditions, choices, default=-998)
 
@@ -65,13 +71,16 @@ data_orig['label_num'] = np.select(conditions, choices, default=-998)
 conditions = [
             swfr_classified['label'] == 'neutral',  # 0
             swfr_classified['label'] == 'link_left',  # 2
-            swfr_classified['label'] == 'link_right',  # 2
+            swfr_classified['label'] == 'link_right',  # 3
             swfr_classified['label'] == 'sweep'  # 1
             ]
 if state_count == 3:
     choices = [0, 2, 2, 1]  # 3 classes
 elif state_count == 2:
     choices = [0, 0, 0, 1]  # 2 classes
+elif state_count == 4:
+    choices = [0, 2, 3, 1]  # 2 classes
+
 swfr_classified['label_num'] = np.select(conditions, choices, default=-998)
 
 """ 
@@ -91,7 +100,9 @@ Cutting the data to a smaller frame for dev purposes
 """
 for stat in stats:
     print(f'Running HMM on {stat}')
-    # for dev, just use stat at a time
+    # note that dropping nans one stat per loop implies results in a different set of data
+    # for each sat (since each has its own set of nans). However, this can help overall b/c one
+    # stat can bridge another stats "nan gap" thereby providing more continuous data.
     data = data_orig[stat][data_orig[stat] != -998].reset_index(drop=False)  # drop nans first
     data = data.rename(columns={'index': 'idx_key'})  # rename the index column to use for later joins
     if cut_point > 0:  # cut the data to a smaller frame to run faster (dev only)
@@ -110,7 +121,10 @@ for stat in stats:
     # pi = hmm.hmm_update_pi(z)
     # A_trans = hmm.hmm_update_trans(z)
     v_path = hmm.hmm_viterbi(gmm_params_, data[stat], a=A_trans, pi_viterbi=pi, stat=stat)
+    # need to figure out why viterbi updates the Pi and A_trans matrix outside of this function, but for now
+    # return the values to the exp of the log.
     pi = np.exp(pi)
+    A_trans = np.exp(A_trans)
     # add the predicted viterbi path to the true labels for comparison (need to also add gamma/prob for each class)
     data[f'pred_class_{stat}'] = v_path
     # add the gamma values as probabilities for each stat and class

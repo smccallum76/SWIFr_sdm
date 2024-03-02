@@ -77,8 +77,8 @@ def hmm_define_trans(data, label):
             temp = z[i] + z[j].shift(periods=-1)
             class_count = len(temp[temp == 2])
             # the conditional below prevents zero entries in the transition matrix (which are problematic)
-            if class_count < 1:
-                class_count = 1
+            # if class_count < 1:
+            #     class_count = 1
             a[i, j] = class_count
 
     # normalize the 'a' matrix based on the total count of occurrences in each state
@@ -173,15 +173,25 @@ def hmm_forward(gmm_params, data, A_trans, pi, stat='xpehh'):
             m_alpha_temp = []
             for cj in range(len(classes)):
                 # Alpha for i=1, there will need to be j classes (neutral, link, sweep, ...)
-                # what about a temp m1_alpha to hold the values...I just need the max
-                m_alpha_temp.append(log_alpha[cj][t - 1] + np.log(A_new[cj, ci]))
+                if (A_new[cj, ci] == 0) or (A_new[cj, ci] == -np.inf):  # catching div by zero errors
+                    log_A_new = -np.inf
+                else:
+                    log_A_new = np.log(A_new[cj, ci])
+                # m_alpha_temp.append(log_alpha[cj][t - 1] + np.log(A_new[cj, ci]))
+                m_alpha_temp.append(log_alpha[cj][t - 1] + log_A_new)
+
             m_alpha[ci].append(max(m_alpha_temp))  # this may be able to be flushed after each iteration (it's needed only as calc)
 
             """ determine the sum of the exponential for a given class """
             exp_sum_temp = []
             for cj in range(len(classes)):
                 # note, m_alpha is t-1 b/c the first m_alpha entry was done at t=1 (so it is offset)
-                exp_sum_temp.append(np.exp(log_alpha[cj][t - 1] + np.log(A_new[cj, ci]) - m_alpha[ci][t-1]))
+                if (A_new[cj, ci] == 0) or (A_new[cj, ci] == -np.inf):  # catching div by zero errors
+                    log_A_new = -np.inf
+                else:
+                    log_A_new = np.log(A_new[cj, ci])
+                # exp_sum_temp.append(np.exp(log_alpha[cj][t - 1] + np.log(A_new[cj, ci]) - m_alpha[ci][t - 1]))
+                exp_sum_temp.append(np.exp(log_alpha[cj][t - 1] + log_A_new - m_alpha[ci][t-1]))
             exp_sum[ci].append(sum(exp_sum_temp))
 
             """ finally, update log alpha """
@@ -263,13 +273,24 @@ def hmm_backward(gmm_params, data, A_trans, pi, stat='xpehh'):
             m_beta_temp = []
             for cj in range(len(classes)):
                 # beta for i=n, there will need to be j classes (neutral, link, sweep, ...)
-                m_beta_temp.append(log_beta[cj][0][t + 1] + np.log(A_new[ci, cj]) + np.log(bx[cj][0][t + 1]))
+                if (A_new[cj, ci] == 0) or (A_new[cj, ci] == -np.inf):  # catching div by zero errors
+                    log_A_new = -np.inf
+                else:
+                    log_A_new = np.log(A_new[cj, ci])
+                # m_beta_temp.append(log_beta[cj][0][t + 1] + np.log(A_new[ci, cj]) + np.log(bx[cj][0][t + 1]))
+                m_beta_temp.append(log_beta[cj][0][t + 1] + log_A_new + np.log(bx[cj][0][t + 1]))
             # m_beta[ci].append(max(m_beta_temp))  # this may be able to be flushed after each iteration (it's needed only as calc)
             m_beta = max(m_beta_temp)
             """ determine the sum of the exponential for a given class """
             exp_sum_temp = []
             for cj in range(len(classes)):
-                exp_sum_temp.append(np.exp(log_beta[cj][0][t + 1] + np.log(A_new[ci, cj]) + np.log(bx[cj][0][t + 1])
+                if (A_new[ci, cj] == 0) or (A_new[ci, cj] == -np.inf):  # catching div by zero errors
+                    log_A_new = -np.inf
+                else:
+                    log_A_new = np.log(A_new[ci, cj])
+                # exp_sum_temp.append(np.exp(log_beta[cj][0][t + 1] + np.log(A_new[ci, cj]) + np.log(bx[cj][0][t + 1])
+                #                            - m_beta))
+                exp_sum_temp.append(np.exp(log_beta[cj][0][t + 1] + log_A_new + np.log(bx[cj][0][t + 1])
                                            - m_beta))
             exp_sum = sum(exp_sum_temp)
 
@@ -426,7 +447,15 @@ def hmm_viterbi(gmm_params, data, a, pi_viterbi, stat='xpehh'):
     for c in range(len(classes)):
         bx[c] = np.log(bx[c])
         pi_viterbi[c] = np.log(pi_viterbi[c])
-    a = np.log(a)
+
+    # a = np.log(a)
+    # loop to catch div by zero warnings
+    for ci in range(len(classes)):
+        for cj in range(len(classes)):
+            if (a[ci, cj] == 0) or (a[ci, cj] == -np.inf):
+                a[ci, cj] = -np.inf
+            else:
+                a[ci, cj] = np.log(a[ci, cj])
 
     # initiate the sequence for each class at the 0th index
     for c in range(len(classes)):
@@ -444,6 +473,7 @@ def hmm_viterbi(gmm_params, data, a, pi_viterbi, stat='xpehh'):
     # note that in the event of a tie the first index is returned. However, in a real situation a tie would be extremely
     # unlikely.
     path = np.argmax(p, axis=0)
+
     return path
 
 def hmm_get_swifr_classes(path):
