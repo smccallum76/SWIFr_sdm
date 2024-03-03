@@ -423,6 +423,7 @@ def hmm_viterbi(gmm_params, data, a, pi_viterbi, stat='xpehh'):
     classes = gmm_params['class'].unique()
     p = np.empty(shape=(len(classes), n))
     bx = np.empty(shape=(len(classes), n))
+    pointer = np.empty(shape=(len(classes), n))
 
     """ build the matrix of pdf values for each class [may want to make this its own function - DO THIS] """
     for c in range(len(classes)):
@@ -461,33 +462,22 @@ def hmm_viterbi(gmm_params, data, a, pi_viterbi, stat='xpehh'):
     for c in range(len(classes)):
         p[c, 0] = pi_viterbi[c] + bx[c][0]
 
-    # for t in range(1, n):
-    #     # pointer points to the previous most state that was most likely (where we are actually moving from).
-    #     # this is needed b/c when the transition matrix has zero prob, there are impossible moves.
-    #     pointer = np.argmax(p[:, t-1], axis=0)  # this points to the previous class winner
-    #     for ci in range(len(classes)):
-    #         temp = []
-    #         for cj in range(len(classes)):
-    #             # temp hold the values intermediate values that evaluate the probability of being in the current
-    #             # class when considering all possible transitions to this class.
-    #             if a[pointer, cj] == -np.inf:
-    #                 pass
-    #             else:
-    #                 temp.append(p[cj, t - 1] + a[cj, ci])
-    #         p[ci, t] = bx[ci][t] + np.max(temp)
-    #
+    pointer[0, 0] = np.argmax(p[:, 0], axis=0)
     for t in range(1, n):
         # pointer points to the previous most state that was most likely (where we are actually moving from).
         # this is needed b/c when the transition matrix has zero prob, there are impossible moves.
-        pointer = np.argmax(p[:, t-1], axis=0)  # this points to the previous class winner
-        temp = []
-        for c in range(len(classes)):
-            temp.append(p[pointer, t - 1] + a[pointer, c])
-            # p[c, t] = bx[c][t] + p[pointer, t - 1] + a[pointer, c]
 
-            p[c, t] = bx[c][t] + np.max(temp)
+        for ci in range(len(classes)):
+            temp = []
+            for cj in range(len(classes)):
+                # temp hold the values intermediate values that evaluate the probability of being in the current
+                # class when considering all possible transitions to this class.
+                temp.append(p[cj, t - 1] + a[cj, ci])
+            p[ci, t] = bx[ci][t] + np.max(temp)
+            # pointer[ci, t] = np.argmax(p[:, t - 1], axis=0)  # this points to the previous class winner
+            pointer[ci, t] = np.argmax(temp) # this points to the previous state the leads to the current stat with highest prop
 
-    # return the index of the max value in each row which corresponds the classes in the same order as 'classes'
+            # return the index of the max value in each row which corresponds the classes in the same order as 'classes'
     # note that in the event of a tie the first index is returned. However, in a real situation a tie would be extremely
     # unlikely.
     path = np.argmax(p, axis=0)
