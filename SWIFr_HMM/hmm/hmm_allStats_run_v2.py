@@ -2,6 +2,8 @@ import hmm_funcs as hmm
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
+import matplotlib as mpl
 from sklearn.metrics import confusion_matrix,  ConfusionMatrixDisplay
 from sklearn.preprocessing import LabelBinarizer
 from sklearn.metrics import roc_curve, roc_auc_score
@@ -12,7 +14,7 @@ Path to data
 ---------------------------------------------------------------------------------------------------
 """
 state_count = 4  # 3 states implies neutral, sweep, and link; 2 states implies neutral and sweep
-cut_point = 0  # set to zero if all data is to be used
+cut_point = 100000  # set to zero if all data is to be used
 
 if state_count == 2:
     gmm_path = '../../swifr_pkg/test_data/simulations_4_swifr_2class/'
@@ -68,7 +70,8 @@ if state_count == 3:
 elif state_count == 2:
     choices = [0, 0, 0, 1]  # 2 classes
 elif state_count == 4:
-    choices = [0, 2, 3, 1]  # 2 classes
+    # choices = [0, 2, 3, 1]  # 2 classes
+    choices = [0, 1, 2, 3]  # 2 classes
 
 data_orig['label_num'] = np.select(conditions, choices, default=-998)
 
@@ -84,7 +87,8 @@ if state_count == 3:
 elif state_count == 2:
     choices = [0, 0, 0, 1]  # 2 classes
 elif state_count == 4:
-    choices = [0, 2, 3, 1]  # 2 classes
+    # choices = [0, 2, 3, 1]  # 2 classes
+    choices = [0, 1, 2, 3]  # 2 classes
 
 swfr_classified['label_num'] = np.select(conditions, choices, default=-998)
 
@@ -146,6 +150,72 @@ for stat in stats:
 # nans will be determined using the 'pred_class_<stat>' columns. The actual stat columns could be used
 cols = data_orig.filter(regex=("pred_class_*")).columns.tolist()
 data_noNans = data_orig.dropna(subset=cols, how='all').reset_index(drop=True)
+
+""" 
+---------------------------------------------------------------------------------------------------
+Plot -- Path and stat comparison [flashlight plot]
+---------------------------------------------------------------------------------------------------
+"""
+xs = np.arange(0, len(data_noNans), 1)
+cmap = mpl.colormaps['viridis']
+legend_colors = cmap(np.linspace(0, 1, len(pi)))
+
+fig = plt.figure(figsize=(16, 7))
+gs = fig.add_gridspec(3, hspace=0)
+axs = gs.subplots(sharex=True, sharey=False)
+fig.suptitle(f'Actual Path, Predicted Path, and {stats[0]}')
+axs[0].plot(xs, data_noNans['label_num'], color='black')
+axs[0].scatter(xs, data_noNans['label_num'], c=data_noNans['label_num'],
+               cmap='viridis', edgecolor='none', s=30)
+
+axs[1].plot(xs, data_noNans[f'pred_class_{stats[0]}'], color='black')
+axs[1].scatter(xs, data_noNans[f'pred_class_{stats[0]}'], c=data_noNans[f'pred_class_{stats[0]}'],
+               cmap='viridis', edgecolor='none', s=30)
+
+axs[2].scatter(xs, data_noNans[f'{stats[0]}'], c=data_noNans[f'{stats[0]}'], cmap='viridis', edgecolor='none', s=3)
+
+axs[0].set(ylabel='Actual State')
+axs[1].set(ylabel='Predicted State')
+axs[2].set(ylabel=f'Value {stats[0]}')
+# Hide x labels and tick labels for all but bottom plot.
+for ax in axs:
+    ax.label_outer()
+
+legend_elements = [Line2D([0], [0], marker='o', color='w', label='0: Neutral',
+                          markerfacecolor=legend_colors[0], markersize=15),
+                   Line2D([0], [0], marker='o', color='w', label='1: Link_Left',
+                          markerfacecolor=legend_colors[1], markersize=15),
+                   Line2D([0], [0], marker='o', color='w', label='2: Link_Right',
+                          markerfacecolor=legend_colors[2], markersize=15),
+                   Line2D([0], [0], marker='o', color='w', label='3: Sweep',
+                          markerfacecolor=legend_colors[3], markersize=15)]
+
+axs[0].legend(handles=legend_elements, loc='upper left')
+axs[1].legend(handles=legend_elements, loc='upper left')
+plt.show()
+
+""" 
+---------------------------------------------------------------------------------------------------
+Confusion Matrix - need to make a function
+---------------------------------------------------------------------------------------------------
+"""
+# path_actual = data_noNans['label_num']
+# path_pred = data_noNans[f'pred_class_{stats[0]}']  # for dev purposes only
+#
+# fig, axs = plt.subplots(1,2, figsize=(14, 6))
+# cm1 = confusion_matrix(path_actual, path_pred, normalize='true')
+# cm2 = confusion_matrix(path_actual, path_pred)
+#
+# axs[0].set_title(f'Path using {stats[0]} - Normalized')
+# axs[1].set_title(f'Path using {stats[0]} - Counts')
+# ConfusionMatrixDisplay(confusion_matrix=cm1, display_labels=classes).plot(
+#     include_values=True, ax=axs[0], cmap='cividis')
+# ConfusionMatrixDisplay(confusion_matrix=cm2, display_labels=classes).plot(
+#     include_values=True, ax=axs[1], cmap='cividis')
+# fig.tight_layout()
+# plt.show()
+
+
 
 # """
 # ---------------------------------------------------------------------------------------------------
@@ -217,25 +287,3 @@ data_noNans = data_orig.dropna(subset=cols, how='all').reset_index(drop=True)
 # plt.legend()
 # plt.show()
 
-""" 
----------------------------------------------------------------------------------------------------
-Confusion Matrix - need to make a function
----------------------------------------------------------------------------------------------------
-"""
-path_actual = data_noNans['label_num']
-# path_pred = data_noNans['pred_path']
-# path_pred = data_noNans['pred_class_xpehh']
-path_pred = data_noNans[f'pred_class_{stats[0]}']  # for dev purposes only
-
-fig, axs = plt.subplots(1,2, figsize=(14, 6))
-cm1 = confusion_matrix(path_actual, path_pred, normalize='true')
-cm2 = confusion_matrix(path_actual, path_pred)
-
-axs[0].set_title('Path using all stats - Normalized')
-axs[1].set_title('Path using all Stats - Counts')
-ConfusionMatrixDisplay(confusion_matrix=cm1, display_labels=classes).plot(
-    include_values=True, ax=axs[0], cmap='cividis')
-ConfusionMatrixDisplay(confusion_matrix=cm2, display_labels=classes).plot(
-    include_values=True, ax=axs[1], cmap='cividis')
-fig.tight_layout()
-plt.show()
