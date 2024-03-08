@@ -417,7 +417,7 @@ def hmm_update_trans(z):
     # a[a == np.nan] = 1e-4
     return a
 
-def hmm_viterbi(gmm_params, data, a, pi_viterbi, stat='xpehh'):
+def hmm_viterbi(gmm_params, data, a, pi_viterbi, stat):
     # some initializations and settings
     n = len(data)
     classes = gmm_params['class'].unique()
