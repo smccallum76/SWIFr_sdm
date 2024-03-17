@@ -14,7 +14,7 @@ Path to data
 ---------------------------------------------------------------------------------------------------
 """
 state_count = 4  # 3 states implies neutral, sweep, and link; 2 states implies neutral and sweep
-cut_point = 100000  # set to zero if all data is to be used
+cut_point = 20000  # set to zero if all data is to be used
 
 if state_count == 2:
     gmm_path = '../../swifr_pkg/test_data/simulations_4_swifr_2class/'
@@ -36,7 +36,7 @@ Load the GMM params from SWIFr_train
 gmm_params = hmm.hmm_init_params(gmm_path)
 classes = gmm_params['class'].unique()
 stats = gmm_params['stat'].unique()
-stats = ['ihs_afr_std']  # overwriting the stats field for dev purposes
+# stats = ['fst']  # overwriting the stats field for dev purposes
 
 """ 
 ---------------------------------------------------------------------------------------------------
@@ -130,26 +130,56 @@ for stat in stats:
     z, gamma = hmm.hmm_gamma(alpha=alpha_new, beta=beta_new, n=len(data))
     # pi = hmm.hmm_update_pi(z)
     # A_trans = hmm.hmm_update_trans(z)
-    v_path = hmm.hmm_viterbi(gmm_params_, data[stat], a=A_trans, pi_viterbi=pi, stat=stat)
+    v_path, v_delta = hmm.hmm_viterbi(gmm_params_, data[stat], a=A_trans, pi_viterbi=pi, stat=stat)
+    # need to figure out why viterbi updates the Pi and A_trans matrix outside of this function, but for now
+    # return the values to the exp of the log.
+    pi = np.exp(pi)
+    A_trans = np.exp(A_trans)
+    stoch_back, delta_prob = hmm.stochastic_backtrace(gmm_params_, data[stat], a=A_trans, pi_stoch=pi, stat=stat)
     # need to figure out why viterbi updates the Pi and A_trans matrix outside of this function, but for now
     # return the values to the exp of the log.
     pi = np.exp(pi)
     A_trans = np.exp(A_trans)
     # add the predicted viterbi path to the true labels for comparison (need to also add gamma/prob for each class)
-    data[f'pred_class_{stat}'] = v_path
+    data[f'viterbi_class_{stat}'] = v_path
     # add the gamma values as probabilities for each stat and class
     temp_cols = []
     for g in range(len(gamma)):
         temp_cols.append(f'P({classes[g]}_{stat})')
         data[f'P({classes[g]}_{stat})'] = gamma[g]
 
-    data_cols = ['idx_key', f'pred_class_{stat}'] + temp_cols
+    data_cols = ['idx_key', f'viterbi_class_{stat}'] + temp_cols
     data_orig = pd.merge(data_orig, data[data_cols], on='idx_key', how='left')
 
 # drop nans where all stats are null (we can't make any prediction here without imputation)
 # nans will be determined using the 'pred_class_<stat>' columns. The actual stat columns could be used
-cols = data_orig.filter(regex=("pred_class_*")).columns.tolist()
+cols = data_orig.filter(regex=("viterbi_class_*")).columns.tolist()
 data_noNans = data_orig.dropna(subset=cols, how='all').reset_index(drop=True)
+
+""" 
+---------------------------------------------------------------------------------------------------
+Signal Stack
+Count of all non-neutral class predictions (i.e., link_left, link_right, OR sweep).
+The assumption non-neutral events are more likely when all the stats indicate a non-neutral event:
+    - 0 = all stats are nan or neutral
+    - 1 = all stats indicate a non-neutral event (full fold)
+    - 0<x<1 = Some fraction of the stats indicate a non-neutral event
+---------------------------------------------------------------------------------------------------
+"""
+data_noNans['viterbi_class_nonNeut'] = np.nansum(data_noNans[cols] > 0, axis=1) / len(stats)
+
+""" 
+---------------------------------------------------------------------------------------------------
+Density Signal Stack
+- This is unfinished and not sure if it is worth the effort
+- Probably need to think of a cleaner way to combine the stats
+---------------------------------------------------------------------------------------------------
+"""
+signal = data_noNans[['idx_key', 'snp_position'] + cols + ['label_num', 'viterbi_class_nonNeut']]
+signal = signal.sort_values(by='snp_position', ascending=True)
+signal['snp_seconds'] = pd.to_datetime(signal['snp_position'], unit='s')
+signal['v_path_count'] = np.nansum(signal[cols] > 0, axis=1)
+signal['v_path_density'] = signal['v_path_count'].rolling(100, center=True).sum()
 
 """ 
 ---------------------------------------------------------------------------------------------------
@@ -168,8 +198,8 @@ axs[0].plot(xs, data_noNans['label_num'], color='black')
 axs[0].scatter(xs, data_noNans['label_num'], c=data_noNans['label_num'],
                cmap='viridis', edgecolor='none', s=30)
 
-axs[1].plot(xs, data_noNans[f'pred_class_{stats[0]}'], color='black')
-axs[1].scatter(xs, data_noNans[f'pred_class_{stats[0]}'], c=data_noNans[f'pred_class_{stats[0]}'],
+axs[1].plot(xs, data_noNans[f'viterbi_class_nonNeut'], color='black')
+axs[1].scatter(xs, data_noNans[f'viterbi_class_nonNeut'], c=data_noNans[f'viterbi_class_nonNeut'],
                cmap='viridis', edgecolor='none', s=30)
 
 axs[2].scatter(xs, data_noNans[f'{stats[0]}'], c=data_noNans[f'{stats[0]}'], cmap='viridis', edgecolor='none', s=3)
@@ -191,7 +221,47 @@ legend_elements = [Line2D([0], [0], marker='o', color='w', label='0: Neutral',
                           markerfacecolor=legend_colors[3], markersize=15)]
 
 axs[0].legend(handles=legend_elements, loc='upper left')
-axs[1].legend(handles=legend_elements, loc='upper left')
+# axs[1].legend(handles=legend_elements, loc='upper left')
+plt.show()
+
+""" 
+---------------------------------------------------------------------------------------------------
+Plot -- Path and stat comparison [flashlight plot]
+---------------------------------------------------------------------------------------------------
+"""
+xs = np.arange(0, len(signal), 1)
+cmap = mpl.colormaps['viridis']
+legend_colors = cmap(np.linspace(0, 1, len(pi)))
+
+fig = plt.figure(figsize=(16, 7))
+gs = fig.add_gridspec(2, hspace=0)
+axs = gs.subplots(sharex=True, sharey=False)
+fig.suptitle(f'Actual Path, Predicted Path, and {stats[0]}')
+axs[0].plot(xs, signal['label_num'], color='black')
+axs[0].scatter(xs, signal['label_num'], c=data_noNans['label_num'],
+               cmap='viridis', edgecolor='none', s=30)
+
+axs[1].plot(xs, signal['v_path_density'], color='black')
+axs[1].scatter(xs, signal['v_path_density'], c=signal[f'viterbi_class_nonNeut'],
+               cmap='viridis', edgecolor='none', s=30)
+
+axs[0].set(ylabel='Actual State')
+axs[1].set(ylabel='Predicted State')
+# Hide x labels and tick labels for all but bottom plot.
+for ax in axs:
+    ax.label_outer()
+
+legend_elements = [Line2D([0], [0], marker='o', color='w', label='0: Neutral',
+                          markerfacecolor=legend_colors[0], markersize=15),
+                   Line2D([0], [0], marker='o', color='w', label='1: Link_Left',
+                          markerfacecolor=legend_colors[1], markersize=15),
+                   Line2D([0], [0], marker='o', color='w', label='2: Link_Right',
+                          markerfacecolor=legend_colors[2], markersize=15),
+                   Line2D([0], [0], marker='o', color='w', label='3: Sweep',
+                          markerfacecolor=legend_colors[3], markersize=15)]
+
+axs[0].legend(handles=legend_elements, loc='upper left')
+# axs[1].legend(handles=legend_elements, loc='upper left')
 plt.show()
 
 """ 

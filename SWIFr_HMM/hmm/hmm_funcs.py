@@ -5,7 +5,9 @@ amount of errors
 """
 import pandas as pd
 import numpy as np
+import numpy.ma as ma
 import scipy.stats as stats
+from scipy.special import logsumexp
 import pickle
 import os
 
@@ -484,7 +486,72 @@ def hmm_viterbi(gmm_params, data, a, pi_viterbi, stat):
         xx = int(path[t+1])
         path[t] = pointer[int(path[t+1]), t+1]
 
-    return path
+    return path, delta
+
+def stochastic_backtrace(gmm_params, data, a, pi_stoch, stat):
+    # some initializations and settings
+    n = len(data)
+    classes = gmm_params['class'].unique()
+    delta = np.empty(shape=(len(classes), n))
+    bx = np.empty(shape=(len(classes), n))
+    stoch_path = np.empty(shape=(1, n))
+
+    """ build the matrix of pdf values for each class [may want to make this its own function - DO THIS] """
+    for c in range(len(classes)):
+        # extract the path to the correct gmm based on the stat and the class
+        gmm_current_path = gmm_params['gmm_path'][(gmm_params['stat'] == stat) &
+                                                  (gmm_params['class'] == classes[c])].reset_index(drop=True)
+        # load the correct gmm based on the correct path
+        gmm = hmm_pickle_load(gmm_current_path.loc[0])  # required to ensure that the gmm model is extracted from the df
+        # extract the components, mean, covariances, and weights for the current gmm
+        components = gmm.n_components
+        mu = gmm.means_
+        cov = gmm.covariances_
+        wgt = gmm.weights_
+        for k in range(components):
+            if k == 0:  # initialize the bx vector
+                bx_temp = hmm_norm_pdf(x=data, mu=mu[k], sd=cov[k] ** 0.5) * wgt[k]
+            else:
+                bx_temp = np.append(bx_temp, hmm_norm_pdf(x=data, mu=mu[k], sd=cov[k] ** 0.5) * wgt[k], axis=0)
+        bx[c] = np.sum(bx_temp, axis=0)
+
+    # take the log of all the Viterbi required properties
+    for c in range(len(classes)):
+        bx[c] = np.log(bx[c])
+        pi_stoch[c] = np.log(pi_stoch[c])
+
+    # a = np.log(a)
+    # loop to catch div by zero warnings
+    for ci in range(len(classes)):
+        for cj in range(len(classes)):
+            if (a[ci, cj] == 0) or (a[ci, cj] == -np.inf):
+                a[ci, cj] = -np.inf
+            else:
+                a[ci, cj] = np.log(a[ci, cj])
+
+    # initiate the sequence for each class at the 0th index
+    for c in range(len(classes)):
+        delta[c, 0] = pi_stoch[c] + bx[c][0]
+
+    for t in range(1, n):
+        # pointer points to the previous most state that was most likely (where we are actually moving from).
+        # this is needed b/c when the transition matrix has zero prob, there are impossible moves.
+        for ci in range(len(classes)):
+            temp = []
+            for cj in range(len(classes)):
+                # temp hold the values intermediate values that evaluate the probability of being in the current
+                # class when considering all possible transitions to this class.
+                temp.append(delta[cj, t - 1] + a[cj, ci])
+            # Note: this is just the fwd algo to this point. The delta output matches exactly the alpha output from
+            # the fwd algo.
+            delta[ci, t] = bx[ci][t] + logsumexp(temp)
+    # use logsumexp to correctly sum the log values. Then in delta_prob to determine the distribution of probs across
+    # the classes.
+    delta_sum = logsumexp(delta, axis=0)
+    delta_prob = np.exp(delta - delta_sum)
+    for i in range(n):
+        stoch_path[0, i] = np.random.choice(len(classes), p=delta_prob[:, i])
+    return delta, delta_prob
 
 def hmm_get_swifr_classes(path):
     # function to return the classes used in SWIFr (e.g., neutral, sweep, etc.)
