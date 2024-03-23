@@ -25,7 +25,7 @@ def hmm_init_params(path):
     stat_list = hmm_get_swifr_stats(path)
 
     df = pd.DataFrame(columns=['stat', 'class', 'gmm_name', 'gmm_path'])
-    count=0
+    count = 0
     for c in class_list:
         for s in stat_list:
             df.loc[count, 'stat'] = s
@@ -548,7 +548,8 @@ def stochastic_backtrace(gmm_params, data, a, pi_stoch, stat):
     # use logsumexp to correctly sum the log values. Then in delta_prob to determine the distribution of probs across
     # the classes.
     delta_sum = logsumexp(delta, axis=0)
-    delta_prob = np.exp(delta - delta_sum)
+    delta_prob = np.exp(delta - delta_sum)  # I think that I'm good to here
+    # the loop below is no good b/c we need to work our way back through the path.
     for i in range(n):
         stoch_path[0, i] = np.random.choice(len(classes), p=delta_prob[:, i])
     return delta, delta_prob
