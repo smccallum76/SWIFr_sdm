@@ -36,7 +36,7 @@ Load the GMM params from SWIFr_train
 gmm_params = hmm.hmm_init_params(gmm_path)
 classes = gmm_params['class'].unique()
 stats = gmm_params['stat'].unique()
-# stats = ['fst']  # overwriting the stats field for dev purposes
+stats = ['ihs_afr_std']  # overwriting the stats field for dev purposes
 
 """ 
 ---------------------------------------------------------------------------------------------------
@@ -130,7 +130,7 @@ for stat in stats:
     # bwd_ll_new, beta_new = hmm.hmm_backward(gmm_params_, data[stat], A_trans, pi, stat=stat)
     # z, gamma = hmm.hmm_gamma(alpha=alpha_new, beta=beta_new, n=len(data))
     v_path, v_delta = hmm.hmm_viterbi(gmm_params_, data[stat], a=np.copy(A_trans), pi_viterbi=np.copy(pi), stat=stat)
-    sb_path = hmm.stochastic_backtrace(gmm_params, np.copy(A_trans), np.copy(delta))
+
     # add the predicted viterbi path to the true labels for comparison (need to also add gamma/prob for each class)
     data[f'viterbi_class_{stat}'] = v_path
     # add the gamma values as probabilities for each stat and class
@@ -141,11 +141,24 @@ for stat in stats:
 
     data_cols = ['idx_key', f'viterbi_class_{stat}'] + temp_cols
     data_orig = pd.merge(data_orig, data[data_cols], on='idx_key', how='left')
+"""
+Stochastic Backtrace loop
+"""
+stoch_sims = 100
+for i in range(stoch_sims):
+    print(i)
+    if i == 0:
+        sb_path = hmm.stochastic_backtrace(gmm_params, np.copy(A_trans), np.copy(delta))
+    else:
+        temp = hmm.stochastic_backtrace(gmm_params, np.copy(A_trans), np.copy(delta))
+        sb_path = np.vstack((sb_path, temp))
+
+sb_paths = np.average(sb_path, axis=0)
 
 # drop nans where all stats are null (we can't make any prediction here without imputation)
 # nans will be determined using the 'pred_class_<stat>' columns. The actual stat columns could be used
-cols = data_orig.filter(regex=("viterbi_class_*")).columns.tolist()
-data_noNans = data_orig.dropna(subset=cols, how='all').reset_index(drop=True)
+viterbi_cols = data_orig.filter(regex=("viterbi_class_*")).columns.tolist()
+viterbi_noNans = data_orig.dropna(subset=viterbi_cols, how='all').reset_index(drop=True)
 
 """ 
 ---------------------------------------------------------------------------------------------------
@@ -157,47 +170,42 @@ The assumption non-neutral events are more likely when all the stats indicate a 
     - 0<x<1 = Some fraction of the stats indicate a non-neutral event
 ---------------------------------------------------------------------------------------------------
 """
-data_noNans['viterbi_class_nonNeut'] = np.nansum(data_noNans[cols] > 0, axis=1) / len(stats)
-
-""" 
----------------------------------------------------------------------------------------------------
-Density Signal Stack
-- This is unfinished and not sure if it is worth the effort
-- Probably need to think of a cleaner way to combine the stats
----------------------------------------------------------------------------------------------------
-"""
-signal = data_noNans[['idx_key', 'snp_position'] + cols + ['label_num', 'viterbi_class_nonNeut']]
-signal = signal.sort_values(by='snp_position', ascending=True)
-signal['snp_seconds'] = pd.to_datetime(signal['snp_position'], unit='s')
-signal['v_path_count'] = np.nansum(signal[cols] > 0, axis=1)
-signal['v_path_density'] = signal['v_path_count'].rolling(100, center=True).sum()
+viterbi_noNans['viterbi_class_nonNeut'] = np.nansum(viterbi_noNans[viterbi_cols] > 0, axis=1) / len(stats)
 
 """ 
 ---------------------------------------------------------------------------------------------------
 Plot -- Path and stat comparison [flashlight plot]
 ---------------------------------------------------------------------------------------------------
 """
-xs = np.arange(0, len(data_noNans), 1)
+xs = np.arange(0, len(viterbi_noNans), 1)
 cmap = mpl.colormaps['viridis']
 legend_colors = cmap(np.linspace(0, 1, len(pi)))
 
-fig = plt.figure(figsize=(16, 7))
-gs = fig.add_gridspec(3, hspace=0)
+fig = plt.figure(figsize=(18, 7))
+gs = fig.add_gridspec(4, hspace=0)
 axs = gs.subplots(sharex=True, sharey=False)
 fig.suptitle(f'Actual Path, Predicted Path, and {stats[0]}')
-axs[0].plot(xs, data_noNans['label_num'], color='black')
-axs[0].scatter(xs, data_noNans['label_num'], c=data_noNans['label_num'],
+axs[0].plot(xs, viterbi_noNans['label_num'], color='black')
+axs[0].scatter(xs, viterbi_noNans['label_num'], c=viterbi_noNans['label_num'],
                cmap='viridis', edgecolor='none', s=30)
 
-axs[1].plot(xs, data_noNans[f'viterbi_class_nonNeut'], color='black')
-axs[1].scatter(xs, data_noNans[f'viterbi_class_nonNeut'], c=data_noNans[f'viterbi_class_nonNeut'],
+# axs[1].plot(xs, data_noNans[f'viterbi_class_nonNeut'], color='black')
+# axs[1].scatter(xs, data_noNans[f'viterbi_class_nonNeut'], c=data_noNans[f'viterbi_class_nonNeut'],
+#                cmap='viridis', edgecolor='none', s=30)
+
+axs[1].plot(xs, viterbi_noNans[f'viterbi_class_{stat}'], color='black')
+axs[1].scatter(xs, viterbi_noNans[f'viterbi_class_{stat}'], c=viterbi_noNans[f'viterbi_class_{stat}'],
                cmap='viridis', edgecolor='none', s=30)
 
-axs[2].scatter(xs, data_noNans[f'{stats[0]}'], c=data_noNans[f'{stats[0]}'], cmap='viridis', edgecolor='none', s=3)
+axs[2].plot(xs, sb_paths, color='black')
+axs[2].scatter(xs, sb_paths, c=sb_paths,cmap='viridis', edgecolor='none', s=30)
+
+axs[3].scatter(xs, viterbi_noNans[f'{stats[0]}'], c=viterbi_noNans[f'{stats[0]}'], cmap='viridis', edgecolor='none', s=3)
 
 axs[0].set(ylabel='Actual State')
-axs[1].set(ylabel='Predicted State')
-axs[2].set(ylabel=f'Value {stats[0]}')
+axs[1].set(ylabel='Viterbi Pred State')
+axs[2].set(ylabel='Stochastic Pred State')
+axs[3].set(ylabel=f'Value {stats[0]}')
 # Hide x labels and tick labels for all but bottom plot.
 for ax in axs:
     ax.label_outer()
@@ -217,6 +225,18 @@ plt.show()
 
 """ 
 ---------------------------------------------------------------------------------------------------
+Density Signal Stack
+- This is unfinished and not sure if it is worth the effort
+- Probably need to think of a cleaner way to combine the stats
+---------------------------------------------------------------------------------------------------
+"""
+signal = viterbi_noNans[['idx_key', 'snp_position'] + viterbi_cols + ['label_num', 'viterbi_class_nonNeut']]
+signal = signal.sort_values(by='snp_position', ascending=True)
+signal['snp_seconds'] = pd.to_datetime(signal['snp_position'], unit='s')
+signal['v_path_count'] = np.nansum(signal[viterbi_cols] > 0, axis=1)
+signal['v_path_density'] = signal['v_path_count'].rolling(100, center=True).sum()
+""" 
+---------------------------------------------------------------------------------------------------
 Plot -- Path and stat comparison [flashlight plot]
 ---------------------------------------------------------------------------------------------------
 """
@@ -229,7 +249,7 @@ gs = fig.add_gridspec(2, hspace=0)
 axs = gs.subplots(sharex=True, sharey=False)
 fig.suptitle(f'Actual Path, Predicted Path, and {stats[0]}')
 axs[0].plot(xs, signal['label_num'], color='black')
-axs[0].scatter(xs, signal['label_num'], c=data_noNans['label_num'],
+axs[0].scatter(xs, signal['label_num'], c=viterbi_noNans['label_num'],
                cmap='viridis', edgecolor='none', s=30)
 
 axs[1].plot(xs, signal['v_path_density'], color='black')
