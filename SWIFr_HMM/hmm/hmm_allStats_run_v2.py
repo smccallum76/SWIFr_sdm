@@ -125,28 +125,19 @@ for stat in stats:
     """
     # the lines below represent a run block for a single stat. This would be repeated for all stats
     gmm_params_ = gmm_params[gmm_params['stat'] == stat].reset_index(drop=True)  # limit gmm params to current stat
-    fwd_ll_new, alpha_new = hmm.hmm_forward(gmm_params_, data[stat], A_trans, pi, stat=stat)
-    bwd_ll_new, beta_new = hmm.hmm_backward(gmm_params_, data[stat], A_trans, pi, stat=stat)
-    z, gamma = hmm.hmm_gamma(alpha=alpha_new, beta=beta_new, n=len(data))
-    # pi = hmm.hmm_update_pi(z)
-    # A_trans = hmm.hmm_update_trans(z)
-    v_path, v_delta = hmm.hmm_viterbi(gmm_params_, data[stat], a=A_trans, pi_viterbi=pi, stat=stat)
-    # need to figure out why viterbi updates the Pi and A_trans matrix outside of this function, but for now
-    # return the values to the exp of the log.
-    pi = np.exp(pi)
-    A_trans = np.exp(A_trans)
-    stoch_back, delta_prob = hmm.stochastic_backtrace(gmm_params_, data[stat], a=A_trans, pi_stoch=pi, stat=stat)
-    # need to figure out why viterbi updates the Pi and A_trans matrix outside of this function, but for now
-    # return the values to the exp of the log.
-    pi = np.exp(pi)
-    A_trans = np.exp(A_trans)
+    # fwd_ll_new, alpha_new = hmm.hmm_forward(gmm_params_, data[stat], A_trans, pi, stat=stat)
+    delta = hmm.hmm_forward_2(gmm_params, data[stat], np.copy(A_trans), np.copy(pi), stat=stat)
+    # bwd_ll_new, beta_new = hmm.hmm_backward(gmm_params_, data[stat], A_trans, pi, stat=stat)
+    # z, gamma = hmm.hmm_gamma(alpha=alpha_new, beta=beta_new, n=len(data))
+    v_path, v_delta = hmm.hmm_viterbi(gmm_params_, data[stat], a=np.copy(A_trans), pi_viterbi=np.copy(pi), stat=stat)
+    sb_path = hmm.stochastic_backtrace(gmm_params, np.copy(A_trans), np.copy(delta))
     # add the predicted viterbi path to the true labels for comparison (need to also add gamma/prob for each class)
     data[f'viterbi_class_{stat}'] = v_path
     # add the gamma values as probabilities for each stat and class
     temp_cols = []
-    for g in range(len(gamma)):
-        temp_cols.append(f'P({classes[g]}_{stat})')
-        data[f'P({classes[g]}_{stat})'] = gamma[g]
+    # for g in range(len(gamma)):
+    #     temp_cols.append(f'P({classes[g]}_{stat})')
+    #     data[f'P({classes[g]}_{stat})'] = gamma[g]
 
     data_cols = ['idx_key', f'viterbi_class_{stat}'] + temp_cols
     data_orig = pd.merge(data_orig, data[data_cols], on='idx_key', how='left')

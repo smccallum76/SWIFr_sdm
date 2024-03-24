@@ -488,7 +488,7 @@ def hmm_viterbi(gmm_params, data, a, pi_viterbi, stat):
 
     return path, delta
 
-def stochastic_backtrace(gmm_params, data, a, pi_stoch, stat):
+def stochastic_backtrace_old(gmm_params, data, a, pi_stoch, stat):
     # some initializations and settings
     n = len(data)
     classes = gmm_params['class'].unique()
@@ -553,6 +553,127 @@ def stochastic_backtrace(gmm_params, data, a, pi_stoch, stat):
     for i in range(n):
         stoch_path[0, i] = np.random.choice(len(classes), p=delta_prob[:, i])
     return delta, delta_prob
+
+
+def hmm_forward_2(gmm_params, data, a, pi_fwd, stat):
+    # some initializations and settings
+    n = len(data)
+    classes = gmm_params['class'].unique()
+    delta = np.empty(shape=(len(classes), n))
+    bx = np.empty(shape=(len(classes), n))
+
+    """ build the matrix of pdf values for each class [may want to make this its own function - DO THIS] """
+    for c in range(len(classes)):
+        # extract the path to the correct gmm based on the stat and the class
+        gmm_current_path = gmm_params['gmm_path'][(gmm_params['stat'] == stat) &
+                                                  (gmm_params['class'] == classes[c])].reset_index(drop=True)
+        # load the correct gmm based on the correct path
+        gmm = hmm_pickle_load(gmm_current_path.loc[0])  # required to ensure that the gmm model is extracted from the df
+        # extract the components, mean, covariances, and weights for the current gmm
+        components = gmm.n_components
+        mu = gmm.means_
+        cov = gmm.covariances_
+        wgt = gmm.weights_
+        for k in range(components):
+            if k == 0:  # initialize the bx vector
+                bx_temp = hmm_norm_pdf(x=data, mu=mu[k], sd=cov[k] ** 0.5) * wgt[k]
+            else:
+                bx_temp = np.append(bx_temp, hmm_norm_pdf(x=data, mu=mu[k], sd=cov[k] ** 0.5) * wgt[k], axis=0)
+        bx[c] = np.sum(bx_temp, axis=0)
+
+    # take the log of all the Viterbi required properties
+    for c in range(len(classes)):
+        bx[c] = np.log(bx[c])
+        pi_fwd[c] = np.log(pi_fwd[c])
+
+    # a = np.log(a)
+    # loop to catch div by zero warnings
+    for ci in range(len(classes)):
+        for cj in range(len(classes)):
+            if (a[ci, cj] == 0) or (a[ci, cj] == -np.inf):
+                a[ci, cj] = -np.inf
+            else:
+                a[ci, cj] = np.log(a[ci, cj])
+
+    # initiate the sequence for each class at the 0th index
+    for c in range(len(classes)):
+        delta[c, 0] = pi_fwd[c] + bx[c][0]
+
+    for t in range(1, n):
+        # pointer points to the previous most state that was most likely (where we are actually moving from).
+        # this is needed b/c when the transition matrix has zero prob, there are impossible moves.
+        for ci in range(len(classes)):
+            temp = []
+            for cj in range(len(classes)):
+                # temp hold the values intermediate values that evaluate the probability of being in the current
+                # class when considering all possible transitions to this class.
+                temp.append(delta[cj, t - 1] + a[cj, ci])
+            # Note: this is just the fwd algo to this point. The delta output matches exactly the alpha output from
+            # the fwd algo.
+            delta[ci, t] = bx[ci][t] + logsumexp(temp)
+
+    return delta
+
+
+def stochastic_backtrace(gmm_params, a, delta):
+    # some initializations and settings
+    n = len(delta[0, :])
+    classes = gmm_params['class'].unique()
+    state_path = np.empty(shape=(n, )) * np.nan
+
+    # loop to catch div by zero warnings
+    for ci in range(len(classes)):
+        for cj in range(len(classes)):
+            if (a[ci, cj] == 0) or (a[ci, cj] == -np.inf):
+                a[ci, cj] = -np.inf
+            else:
+                a[ci, cj] = np.log(a[ci, cj])
+
+
+    ''' my stuff again'''
+    normalization = logsumexp(delta[:, n-1], axis=0)
+    Probs = np.exp(delta[:, n-1] - normalization)
+
+    state = np.random.choice(len(classes), p=Probs)
+    # print state
+    # at this point we have randomly selected the state, but influenced by the probability of each state (higher the
+    # states probability, the greater the chance that it is picked).
+    state_path[n - 1] = state
+
+    ''' Follow Lauren's Code Here'''
+    p_sum = []
+    for i in range(n - 2, -1, -1):  # we already have the state_path in the final position
+        # print i
+        unnormalized_logprobs = np.empty(shape=(len(classes),)) * np.nan
+        for jprime in range(len(classes)):
+            # here we are making sure that the move is legal b/c a_tran will have prob of 0 for no-go moves
+            unnormalized_logprobs[jprime] = delta[jprime, i] + a[jprime, state_path[i+1].astype(np.int64)]
+
+        # normalization = self.logsumexp([x for x in unnormalized_logprobs if x != 'n/a'])
+        # normalized_logprobs = ['n/a' for thing in range(len(self.hmmstates))]
+        # normalization = logsumexp(delta[:, i], axis=0)
+        normalization = logsumexp(unnormalized_logprobs)
+        normalized_logprobs = np.empty(shape=(len(classes),))
+
+        for jprime in range(len(classes)):
+            # normalized_logprobs[jprime] = delta[jprime][i] + math.log(self.transitions[jprime][state_path[i + 1]]) - normalization
+            normalized_logprobs[jprime] = delta[jprime, i] + a[jprime, state_path[i+1].astype(np.int64)] - normalization
+
+        '''
+        Something is not right with the normalization workflow. The probs do not sum to 1 and the min prop sum is close
+        to zero. 
+        '''
+        Probs = np.exp(normalized_logprobs)
+        p_sum.append(np.sum(Probs))
+        # Probs = Probs / np.sum(Probs)
+
+        state = np.random.choice(len(classes), p=Probs)
+        state_path[i] = state
+
+    p_sum_max = np.max(p_sum)
+    p_sum_min = np.min(p_sum)
+
+    return state_path
 
 def hmm_get_swifr_classes(path):
     # function to return the classes used in SWIFr (e.g., neutral, sweep, etc.)
