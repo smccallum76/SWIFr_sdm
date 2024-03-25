@@ -14,7 +14,8 @@ Path to data
 ---------------------------------------------------------------------------------------------------
 """
 state_count = 4  # 3 states implies neutral, sweep, and link; 2 states implies neutral and sweep
-cut_point = 20000  # set to zero if all data is to be used
+cut_point = 100000  # set to zero if all data is to be used
+stoch_sims = 10
 
 if state_count == 2:
     gmm_path = '../../swifr_pkg/test_data/simulations_4_swifr_2class/'
@@ -28,6 +29,7 @@ elif state_count == 4:
     gmm_path = '../../swifr_pkg/test_data/simulations_4_swifr_4class/'
     data_path = '../../swifr_pkg/test_data/simulations_4_swifr_test_4class/test/test'
     swifr_path = '../../swifr_pkg/test_data/simulations_4_swifr_test_4class/test/test_classified'
+
 """ 
 ---------------------------------------------------------------------------------------------------
 Load the GMM params from SWIFr_train
@@ -37,6 +39,13 @@ gmm_params = hmm.hmm_init_params(gmm_path)
 classes = gmm_params['class'].unique()
 stats = gmm_params['stat'].unique()
 stats = ['ihs_afr_std']  # overwriting the stats field for dev purposes
+
+if stats[0] == 'ihs_afr_std':
+    swifr_path_1stat = '../../swifr_pkg/test_data/simulations_4_swifr_test_4class_ihs/test/test_classified'
+elif stats[0] == 'xpehh':
+    swifr_path_1stat = '../../swifr_pkg/test_data/simulations_4_swifr_test_4class_xpehh/test/test_classified'
+elif stats[0] == 'fst':
+    swifr_path_1stat = '../../swifr_pkg/test_data/simulations_4_swifr_test_4class_fst/test/test_classified'
 
 """ 
 ---------------------------------------------------------------------------------------------------
@@ -52,6 +61,26 @@ data_orig = data_orig.rename(columns={'index': 'idx_key'})  # this will be used 
 #                         (data_orig['fst'] != -998)].reset_index(drop=False)
 # import swifr data that has been classified using gmm
 swfr_classified = hmm.hmm_get_data(swifr_path)
+'''
+SWIFr scenarios below were trained and run on only one stat at a time. This was done for direct comparison
+with the HMM trials using only one stat at a time.
+'''
+swfr_classified_1stat = hmm.hmm_get_data(swifr_path_1stat)
+swfr_classified_1stat = swfr_classified_1stat[swfr_classified_1stat[f'{stats[0]}'] != -998].reset_index(drop=True)
+
+
+# convert swifr probabilities into a classification code
+swifr_cols = [
+                'P(neutral)',
+                'P(link_left)',
+                'P(link_right)',
+                'P(sweep)'
+            ]
+# find the largest prob
+swfr_classified_1stat['swfr_class'] = swfr_classified_1stat[swifr_cols].idxmax(axis='columns')
+# create a new class column and then replace the strings with numbers
+swfr_classified_1stat['swfr_class_num'] = swfr_classified_1stat['swfr_class']
+swfr_classified_1stat['swfr_class_num'] = swfr_classified_1stat['swfr_class_num'].replace(swifr_cols, [0, 1, 2, 3])
 
 """ 
 ---------------------------------------------------------------------------------------------------
@@ -117,6 +146,7 @@ for stat in stats:
     data = data.rename(columns={'index': 'idx_key'})  # rename the index column to use for later joins
     if cut_point > 0:  # cut the data to a smaller frame to run faster (dev only)
         data = data.iloc[0:cut_point]
+        swfr_classified_1stat = swfr_classified_1stat.iloc[0:cut_point]
 
     """ 
     ---------------------------------------------------------------------------------------------------
@@ -144,7 +174,7 @@ for stat in stats:
 """
 Stochastic Backtrace loop
 """
-stoch_sims = 100
+
 for i in range(stoch_sims):
     print(i)
     if i == 0:
@@ -178,11 +208,12 @@ Plot -- Path and stat comparison [flashlight plot]
 ---------------------------------------------------------------------------------------------------
 """
 xs = np.arange(0, len(viterbi_noNans), 1)
+xs2 = np.arange(0, len(swfr_classified_1stat), 1)
 cmap = mpl.colormaps['viridis']
 legend_colors = cmap(np.linspace(0, 1, len(pi)))
 
 fig = plt.figure(figsize=(18, 7))
-gs = fig.add_gridspec(4, hspace=0)
+gs = fig.add_gridspec(5, hspace=0)
 axs = gs.subplots(sharex=True, sharey=False)
 fig.suptitle(f'Actual Path, Predicted Path, and {stats[0]}')
 axs[0].plot(xs, viterbi_noNans['label_num'], color='black')
@@ -200,12 +231,17 @@ axs[1].scatter(xs, viterbi_noNans[f'viterbi_class_{stat}'], c=viterbi_noNans[f'v
 axs[2].plot(xs, sb_paths, color='black')
 axs[2].scatter(xs, sb_paths, c=sb_paths,cmap='viridis', edgecolor='none', s=30)
 
-axs[3].scatter(xs, viterbi_noNans[f'{stats[0]}'], c=viterbi_noNans[f'{stats[0]}'], cmap='viridis', edgecolor='none', s=3)
+axs[3].plot(xs2, swfr_classified_1stat['swfr_class_num'], color='black')
+axs[3].scatter(xs2, swfr_classified_1stat['swfr_class_num'], c=swfr_classified_1stat['swfr_class_num'],
+               cmap='viridis', edgecolor='none', s=30)
+
+axs[4].scatter(xs, viterbi_noNans[f'{stats[0]}'], c=viterbi_noNans[f'{stats[0]}'], cmap='viridis', edgecolor='none', s=3)
 
 axs[0].set(ylabel='Actual State')
-axs[1].set(ylabel='Viterbi Pred State')
-axs[2].set(ylabel='Stochastic Pred State')
-axs[3].set(ylabel=f'Value {stats[0]}')
+axs[1].set(ylabel='Viterbi Pred')
+axs[2].set(ylabel='BackTrc Pred')
+axs[3].set(ylabel='SWIFr Pred')
+axs[4].set(ylabel=f'Value {stats[0]}')
 # Hide x labels and tick labels for all but bottom plot.
 for ax in axs:
     ax.label_outer()
