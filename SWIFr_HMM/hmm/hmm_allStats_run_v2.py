@@ -14,7 +14,7 @@ Path to data
 ---------------------------------------------------------------------------------------------------
 """
 state_count = 4  # 3 states implies neutral, sweep, and link; 2 states implies neutral and sweep
-cut_point = 100000  # set to zero if all data is to be used
+cut_point = 5000  # set to zero if all data is to be used
 stoch_sims = 10
 
 if state_count == 2:
@@ -55,11 +55,6 @@ Load the test data and the data classified by SWIFr GMM
 # this will need to be a 'get' function, but keep it external for now
 data_orig = hmm.hmm_get_data(data_path).reset_index(drop=False)
 data_orig = data_orig.rename(columns={'index': 'idx_key'})  # this will be used for later merge
-# include only rows with all stats not nan
-# data_orig = data_orig[(data_orig['xpehh'] != -998) &
-#                         (data_orig['ihs_afr_std'] != -998) &
-#                         (data_orig['fst'] != -998)].reset_index(drop=False)
-# import swifr data that has been classified using gmm
 swfr_classified = hmm.hmm_get_data(swifr_path)
 '''
 SWIFr scenarios below were trained and run on only one stat at a time. This was done for direct comparison
@@ -90,16 +85,15 @@ Labels to Numbers -- This is temporary and used to simplify link_left and link_r
 # convert the row labels from a string to a numeric value
 conditions = [
             data_orig['label'] == 'neutral',  # 0
-            data_orig['label'] == 'link_left',  # 2
-            data_orig['label'] == 'link_right',  # 3
-            data_orig['label'] == 'sweep'  # 1
+            data_orig['label'] == 'link_left',  # 1
+            data_orig['label'] == 'link_right',  # 2
+            data_orig['label'] == 'sweep'  # 3
             ]
 if state_count == 3:
     choices = [0, 2, 2, 1]  # 3 classes
 elif state_count == 2:
     choices = [0, 0, 0, 1]  # 2 classes
 elif state_count == 4:
-    # choices = [0, 2, 3, 1]  # 2 classes
     choices = [0, 1, 2, 3]  # 2 classes
 
 data_orig['label_num'] = np.select(conditions, choices, default=-998)
@@ -107,16 +101,15 @@ data_orig['label_num'] = np.select(conditions, choices, default=-998)
 # repeat the above, but for the swfr_classified (could tech use the same since the indexing is the same)
 conditions = [
             swfr_classified['label'] == 'neutral',  # 0
-            swfr_classified['label'] == 'link_left',  # 2
-            swfr_classified['label'] == 'link_right',  # 3
-            swfr_classified['label'] == 'sweep'  # 1
+            swfr_classified['label'] == 'link_left',  # 1
+            swfr_classified['label'] == 'link_right',  # 2
+            swfr_classified['label'] == 'sweep'  # 3
             ]
 if state_count == 3:
     choices = [0, 2, 2, 1]  # 3 classes
 elif state_count == 2:
     choices = [0, 0, 0, 1]  # 2 classes
 elif state_count == 4:
-    # choices = [0, 2, 3, 1]  # 2 classes
     choices = [0, 1, 2, 3]  # 2 classes
 
 swfr_classified['label_num'] = np.select(conditions, choices, default=-998)
@@ -171,6 +164,10 @@ for stat in stats:
 
     data_cols = ['idx_key', f'viterbi_class_{stat}'] + temp_cols
     data_orig = pd.merge(data_orig, data[data_cols], on='idx_key', how='left')
+# drop nans where all stats are null (we can't make any prediction here without imputation)
+# nans will be determined using the 'pred_class_<stat>' columns. The actual stat columns could be used
+viterbi_cols = data_orig.filter(regex=("viterbi_class_*")).columns.tolist()
+viterbi_noNans = data_orig.dropna(subset=viterbi_cols, how='all').reset_index(drop=True)
 """
 Stochastic Backtrace loop
 """
@@ -182,14 +179,8 @@ for i in range(stoch_sims):
     else:
         temp = hmm.stochastic_backtrace(gmm_params, np.copy(A_trans), np.copy(delta))
         sb_path = np.vstack((sb_path, temp))
-
-sb_paths = np.average(sb_path, axis=0)
-
-# drop nans where all stats are null (we can't make any prediction here without imputation)
-# nans will be determined using the 'pred_class_<stat>' columns. The actual stat columns could be used
-viterbi_cols = data_orig.filter(regex=("viterbi_class_*")).columns.tolist()
-viterbi_noNans = data_orig.dropna(subset=viterbi_cols, how='all').reset_index(drop=True)
-
+# save stochastic backtrace path
+# sb_path.to_csv(f'output/stochastic_sims_{stats[0]}.csv', index='false')
 """ 
 ---------------------------------------------------------------------------------------------------
 Signal Stack
@@ -227,9 +218,9 @@ axs[0].scatter(xs, viterbi_noNans['label_num'], c=viterbi_noNans['label_num'],
 axs[1].plot(xs, viterbi_noNans[f'viterbi_class_{stat}'], color='black')
 axs[1].scatter(xs, viterbi_noNans[f'viterbi_class_{stat}'], c=viterbi_noNans[f'viterbi_class_{stat}'],
                cmap='viridis', edgecolor='none', s=30)
-
-axs[2].plot(xs, sb_paths, color='black')
-axs[2].scatter(xs, sb_paths, c=sb_paths,cmap='viridis', edgecolor='none', s=30)
+for i in range(len(sb_path[:,0])):
+    axs[2].plot(xs, sb_path[i, :], color='lightgrey')
+# axs[2].scatter(xs, sb_paths, c=sb_paths,cmap='viridis', edgecolor='none', s=30)
 
 axs[3].plot(xs2, swfr_classified_1stat['swfr_class_num'], color='black')
 axs[3].scatter(xs2, swfr_classified_1stat['swfr_class_num'], c=swfr_classified_1stat['swfr_class_num'],

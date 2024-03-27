@@ -614,7 +614,6 @@ def hmm_forward_2(gmm_params, data, a, pi_fwd, stat):
 
     return delta
 
-
 def stochastic_backtrace(gmm_params, a, delta):
     # some initializations and settings
     n = len(delta[0, :])
@@ -630,42 +629,32 @@ def stochastic_backtrace(gmm_params, a, delta):
                 a[ci, cj] = np.log(a[ci, cj])
 
 
-    ''' my stuff again'''
+    ''' normalize and randomly select the state at the last entry'''
     normalization = logsumexp(delta[:, n-1], axis=0)
     Probs = np.exp(delta[:, n-1] - normalization)
 
     state = np.random.choice(len(classes), p=Probs)
-    # print state
     # at this point we have randomly selected the state, but influenced by the probability of each state (higher the
     # states probability, the greater the chance that it is picked).
     state_path[n - 1] = state
 
     ''' Follow Lauren's Code Here'''
     p_sum = []
+    # start from the end and trace to the beginning.
     for i in range(n - 2, -1, -1):  # we already have the state_path in the final position
-        # print i
         unnormalized_logprobs = np.empty(shape=(len(classes),)) * np.nan
         for jprime in range(len(classes)):
             # here we are making sure that the move is legal b/c a_tran will have prob of 0 for no-go moves
             unnormalized_logprobs[jprime] = delta[jprime, i] + a[jprime, state_path[i+1].astype(np.int64)]
 
-        # normalization = self.logsumexp([x for x in unnormalized_logprobs if x != 'n/a'])
-        # normalized_logprobs = ['n/a' for thing in range(len(self.hmmstates))]
-        # normalization = logsumexp(delta[:, i], axis=0)
         normalization = logsumexp(unnormalized_logprobs)
         normalized_logprobs = np.empty(shape=(len(classes),))
 
         for jprime in range(len(classes)):
-            # normalized_logprobs[jprime] = delta[jprime][i] + math.log(self.transitions[jprime][state_path[i + 1]]) - normalization
             normalized_logprobs[jprime] = delta[jprime, i] + a[jprime, state_path[i+1].astype(np.int64)] - normalization
 
-        '''
-        Something is not right with the normalization workflow. The probs do not sum to 1 and the min prop sum is close
-        to zero. 
-        '''
         Probs = np.exp(normalized_logprobs)
         p_sum.append(np.sum(Probs))
-        # Probs = Probs / np.sum(Probs)
 
         state = np.random.choice(len(classes), p=Probs)
         state_path[i] = state
