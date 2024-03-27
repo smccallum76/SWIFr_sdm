@@ -4,6 +4,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 import matplotlib as mpl
+from tqdm import tqdm
 from sklearn.metrics import confusion_matrix,  ConfusionMatrixDisplay
 from sklearn.preprocessing import LabelBinarizer
 from sklearn.metrics import roc_curve, roc_auc_score
@@ -14,8 +15,8 @@ Path to data
 ---------------------------------------------------------------------------------------------------
 """
 state_count = 4  # 3 states implies neutral, sweep, and link; 2 states implies neutral and sweep
-cut_point = 5000  # set to zero if all data is to be used
-stoch_sims = 10
+cut_point = 100000  # set to zero if all data is to be used
+stoch_sims = 1000
 
 if state_count == 2:
     gmm_path = '../../swifr_pkg/test_data/simulations_4_swifr_2class/'
@@ -38,7 +39,7 @@ Load the GMM params from SWIFr_train
 gmm_params = hmm.hmm_init_params(gmm_path)
 classes = gmm_params['class'].unique()
 stats = gmm_params['stat'].unique()
-stats = ['ihs_afr_std']  # overwriting the stats field for dev purposes
+stats = ['xpehh']  # overwriting the stats field for dev purposes
 
 if stats[0] == 'ihs_afr_std':
     swifr_path_1stat = '../../swifr_pkg/test_data/simulations_4_swifr_test_4class_ihs/test/test_classified'
@@ -172,15 +173,18 @@ viterbi_noNans = data_orig.dropna(subset=viterbi_cols, how='all').reset_index(dr
 Stochastic Backtrace loop
 """
 
-for i in range(stoch_sims):
-    print(i)
+for i in tqdm(range(stoch_sims)):
     if i == 0:
         sb_path = hmm.stochastic_backtrace(gmm_params, np.copy(A_trans), np.copy(delta))
     else:
         temp = hmm.stochastic_backtrace(gmm_params, np.copy(A_trans), np.copy(delta))
         sb_path = np.vstack((sb_path, temp))
+
+sb_path_df = pd.DataFrame(sb_path.T, columns=['sb_' + str(i) for i in range(stoch_sims)])
+sb_path_df['idx_key'] = data['idx_key']
+sb_path_df = pd.merge(sb_path_df, data_orig, on='idx_key', how='left')
 # save stochastic backtrace path
-# sb_path.to_csv(f'output/stochastic_sims_{stats[0]}.csv', index='false')
+sb_path_df.to_csv(f'output/stochastic_bt_{stoch_sims}_sims_{stats[0]}.csv', index=False)
 """ 
 ---------------------------------------------------------------------------------------------------
 Signal Stack
