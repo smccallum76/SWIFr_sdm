@@ -16,7 +16,7 @@ Path to data
 """
 state_count = 4  # 3 states implies neutral, sweep, and link; 2 states implies neutral and sweep
 cut_point = 100000  # set to zero if all data is to be used
-stoch_sims = 1000
+stoch_sims = 10
 
 if state_count == 2:
     gmm_path = '../../swifr_pkg/test_data/simulations_4_swifr_2class/'
@@ -39,7 +39,7 @@ Load the GMM params from SWIFr_train
 gmm_params = hmm.hmm_init_params(gmm_path)
 classes = gmm_params['class'].unique()
 stats = gmm_params['stat'].unique()
-stats = ['xpehh']  # overwriting the stats field for dev purposes
+stats = ['ihs_afr_std']  # overwriting the stats field for dev purposes
 
 if stats[0] == 'ihs_afr_std':
     swifr_path_1stat = '../../swifr_pkg/test_data/simulations_4_swifr_test_4class_ihs/test/test_classified'
