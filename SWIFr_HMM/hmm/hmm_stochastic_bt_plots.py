@@ -10,7 +10,7 @@ import hmm_funcs as hmm
 Import and Sorting
 ---------------------------------------------------------------------------------
 """
-stat = 'ihs_afr_std'
+stat = 'fst'
 classes = 4
 # import
 data = pd.read_csv(f'output/stochastic_bt_1000_sims_{stat}.csv')
