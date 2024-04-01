@@ -16,7 +16,7 @@ Path to data
 """
 state_count = 4  # 3 states implies neutral, sweep, and link; 2 states implies neutral and sweep
 cut_point = 100000  # set to zero if all data is to be used
-stoch_sims = 10
+stoch_sims = 5
 
 if state_count == 2:
     gmm_path = '../../swifr_pkg/test_data/simulations_4_swifr_2class/'
@@ -39,7 +39,7 @@ Load the GMM params from SWIFr_train
 gmm_params = hmm.hmm_init_params(gmm_path)
 classes = gmm_params['class'].unique()
 stats = gmm_params['stat'].unique()
-stats = ['ihs_afr_std']  # overwriting the stats field for dev purposes
+stats = ['xpehh']  # overwriting the stats field for dev purposes
 
 if stats[0] == 'ihs_afr_std':
     swifr_path_1stat = '../../swifr_pkg/test_data/simulations_4_swifr_test_4class_ihs/test/test_classified'
@@ -86,16 +86,17 @@ Labels to Numbers -- This is temporary and used to simplify link_left and link_r
 # convert the row labels from a string to a numeric value
 conditions = [
             data_orig['label'] == 'neutral',  # 0
-            data_orig['label'] == 'link_left',  # 1
-            data_orig['label'] == 'link_right',  # 2
-            data_orig['label'] == 'sweep'  # 3
+            data_orig['label'] == 'link_left',  # 2
+            data_orig['label'] == 'link_right',  # 3
+            data_orig['label'] == 'sweep'  # 1
             ]
 if state_count == 3:
     choices = [0, 2, 2, 1]  # 3 classes
 elif state_count == 2:
     choices = [0, 0, 0, 1]  # 2 classes
 elif state_count == 4:
-    choices = [0, 1, 2, 3]  # 2 classes
+    # choices = [0, 1, 2, 3]  # 4
+    choices = [0, 2, 3, 1]
 
 data_orig['label_num'] = np.select(conditions, choices, default=-998)
 
@@ -111,7 +112,8 @@ if state_count == 3:
 elif state_count == 2:
     choices = [0, 0, 0, 1]  # 2 classes
 elif state_count == 4:
-    choices = [0, 1, 2, 3]  # 2 classes
+    # choices = [0, 1, 2, 3]  # 2 classes
+    choices = [0, 2, 3, 1]
 
 swfr_classified['label_num'] = np.select(conditions, choices, default=-998)
 
@@ -120,8 +122,7 @@ swfr_classified['label_num'] = np.select(conditions, choices, default=-998)
 Initiate Pi and the transition matrix
 ---------------------------------------------------------------------------------------------------
 """
-# for now I will define the pi vector using the label_num, but this is only b/c the data labels are not a match
-# with the hmm classes (e.g., link_left and link_right are being defined as link)
+# for now I will define the pi vector using the label_num
 pi, class_check = hmm.hmm_define_pi(data_orig, 'label_num')
 A_trans = hmm.hmm_define_trans(data_orig, 'label_num')
 
@@ -243,11 +244,11 @@ for ax in axs:
 
 legend_elements = [Line2D([0], [0], marker='o', color='w', label='0: Neutral',
                           markerfacecolor=legend_colors[0], markersize=15),
-                   Line2D([0], [0], marker='o', color='w', label='1: Link_Left',
+                   Line2D([0], [0], marker='o', color='w', label='1: Sweep',
                           markerfacecolor=legend_colors[1], markersize=15),
-                   Line2D([0], [0], marker='o', color='w', label='2: Link_Right',
+                   Line2D([0], [0], marker='o', color='w', label='2: Link_Left',
                           markerfacecolor=legend_colors[2], markersize=15),
-                   Line2D([0], [0], marker='o', color='w', label='3: Sweep',
+                   Line2D([0], [0], marker='o', color='w', label='3: Link_Right',
                           markerfacecolor=legend_colors[3], markersize=15)]
 
 axs[0].legend(handles=legend_elements, loc='upper left')
@@ -265,7 +266,7 @@ signal = viterbi_noNans[['idx_key', 'snp_position'] + viterbi_cols + ['label_num
 signal = signal.sort_values(by='snp_position', ascending=True)
 signal['snp_seconds'] = pd.to_datetime(signal['snp_position'], unit='s')
 signal['v_path_count'] = np.nansum(signal[viterbi_cols] > 0, axis=1)
-signal['v_path_density'] = signal['v_path_count'].rolling(100, center=True).sum()
+signal['v_path_density'] = signal['v_path_count'].rolling(150, center=True).sum()
 """ 
 ---------------------------------------------------------------------------------------------------
 Plot -- Path and stat comparison [flashlight plot]
