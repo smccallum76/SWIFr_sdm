@@ -39,7 +39,7 @@ Load the GMM params from SWIFr_train
 gmm_params = hmm.hmm_init_params(gmm_path)
 classes = gmm_params['class'].unique()
 stats = gmm_params['stat'].unique()
-stats = ['xpehh']  # overwriting the stats field for dev purposes
+stats = ['ihs_afr_std']  # overwriting the stats field for dev purposes
 
 if stats[0] == 'ihs_afr_std':
     swifr_path_1stat = '../../swifr_pkg/test_data/simulations_4_swifr_test_4class_ihs/test/test_classified'
@@ -64,13 +64,29 @@ with the HMM trials using only one stat at a time.
 swfr_classified_1stat = hmm.hmm_get_data(swifr_path_1stat)
 swfr_classified_1stat = swfr_classified_1stat[swfr_classified_1stat[f'{stats[0]}'] != -998].reset_index(drop=True)
 
+"""
+---------------------------------------------------------------------------------------------------
+Create new column using ints for labels (i.e., replacing, neutral, sweep, etc.)
+---------------------------------------------------------------------------------------------------
+"""
 
-# convert swifr probabilities into a classification code
+data_orig['label_num'] = data_orig['label']
+swfr_classified['label_num'] = swfr_classified['label']
+
+for c in range(len(classes)):
+    data_orig['label_num'] = data_orig['label_num'].replace(to_replace=classes[c], value=c)
+    swfr_classified['label_num'] = swfr_classified['label_num'].replace(to_replace=classes[c], value=c)
+
+"""
+---------------------------------------------------------------------------------------------------
+convert swifr probabilities into a classification code [for now, swifr_cols need to be in the same order as classes]
+---------------------------------------------------------------------------------------------------
+"""
 swifr_cols = [
                 'P(neutral)',
+                'P(sweep)',
                 'P(link_left)',
-                'P(link_right)',
-                'P(sweep)'
+                'P(link_right)'
             ]
 # find the largest prob
 swfr_classified_1stat['swfr_class'] = swfr_classified_1stat[swifr_cols].idxmax(axis='columns')
@@ -78,44 +94,7 @@ swfr_classified_1stat['swfr_class'] = swfr_classified_1stat[swifr_cols].idxmax(a
 swfr_classified_1stat['swfr_class_num'] = swfr_classified_1stat['swfr_class']
 swfr_classified_1stat['swfr_class_num'] = swfr_classified_1stat['swfr_class_num'].replace(swifr_cols, [0, 1, 2, 3])
 
-""" 
----------------------------------------------------------------------------------------------------
-Labels to Numbers -- This is temporary and used to simplify link_left and link_right to link
----------------------------------------------------------------------------------------------------
-"""
-# convert the row labels from a string to a numeric value
-conditions = [
-            data_orig['label'] == 'neutral',  # 0
-            data_orig['label'] == 'link_left',  # 2
-            data_orig['label'] == 'link_right',  # 3
-            data_orig['label'] == 'sweep'  # 1
-            ]
-if state_count == 3:
-    choices = [0, 2, 2, 1]  # 3 classes
-elif state_count == 2:
-    choices = [0, 0, 0, 1]  # 2 classes
-elif state_count == 4:
-    # choices = [0, 1, 2, 3]  # 4
-    choices = [0, 2, 3, 1]
-
-data_orig['label_num'] = np.select(conditions, choices, default=-998)
-
-# repeat the above, but for the swfr_classified (could tech use the same since the indexing is the same)
-conditions = [
-            swfr_classified['label'] == 'neutral',  # 0
-            swfr_classified['label'] == 'link_left',  # 1
-            swfr_classified['label'] == 'link_right',  # 2
-            swfr_classified['label'] == 'sweep'  # 3
-            ]
-if state_count == 3:
-    choices = [0, 2, 2, 1]  # 3 classes
-elif state_count == 2:
-    choices = [0, 0, 0, 1]  # 2 classes
-elif state_count == 4:
-    # choices = [0, 1, 2, 3]  # 2 classes
-    choices = [0, 2, 3, 1]
-
-swfr_classified['label_num'] = np.select(conditions, choices, default=-998)
+xx = swfr_classified_1stat[swfr_classified_1stat['swfr_class'] == 'P(link_right)']
 
 """ 
 ---------------------------------------------------------------------------------------------------
@@ -186,6 +165,7 @@ sb_path_df['idx_key'] = data['idx_key']
 sb_path_df = pd.merge(sb_path_df, data_orig, on='idx_key', how='left')
 # save stochastic backtrace path
 sb_path_df.to_csv(f'output/stochastic_bt_{stoch_sims}_sims_{stats[0]}.csv', index=False)
+
 """ 
 ---------------------------------------------------------------------------------------------------
 Signal Stack
