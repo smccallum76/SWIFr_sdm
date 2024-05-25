@@ -305,7 +305,7 @@ if __name__ == '__main__': # added for debugging
     # sdm modified lines
     parser = argparse.ArgumentParser()
     # location of the trained gmm model to use
-    parser.add_argument('--path2trained',action='store',dest='path2trained',default='test_data/simulations_4_swifr_4class_fst/')
+    parser.add_argument('--path2trained',action='store',dest='path2trained',default='test_data/thesis_3class/')
     # interactive allows the user to enter a value for Fst, XP-EHH, iHS, and DDAF as a one-off test (like classifying
     # one row of data).
     parser.add_argument('--interactive',action='store_true',dest='interactive',default=False)
@@ -313,14 +313,14 @@ if __name__ == '__main__': # added for debugging
     # this could be the test_test_block_2classes in the application_example folder
     parser.add_argument('--file',action='store',dest='filename')
     # parser.add_argument('--pi',action='store',nargs='+',default=['0.99999', '0.00001' ]) #can use with either mode
-    # parser.add_argument('--pi',action='store',nargs='+',default=['0.92', '0.00001', '0.07999']) #can use with either mode
-    parser.add_argument('--pi',action='store',nargs='+',default=['0.92', '0.00001', '0.03999', '0.04']) #can use with either mode
+    parser.add_argument('--pi',action='store',nargs='+',default=['0.92', '0.00001', '0.07999']) #can use with either mode
+    # parser.add_argument('--pi',action='store',nargs='+',default=['0.92', '0.00001', '0.03999', '0.04']) #can use with either mode
     parser.add_argument('--outfile',action='store',default='') # this is where the new file will be stored
     parser.add_argument('--nb',action='store_true',dest='nb',default=True) #run naive bayes (default is false)
     parser.add_argument('--ode',action='store_true',dest='ode',default=True) #output_db non-normalized AODE output_db and inidividual ODE scores (default is false)
     args = parser.parse_args()
 
-    args.filename = 'test_data/simulations_4_swifr_test_4class_fst/test/test'  # location of data that is to be classified
+    args.filename = 'test_data/thesis_3class_test/test/test'  # location of data that is to be classified
      
     if not args.interactive and not args.filename:
         print("Error: SWIF(r) must be run either with an input file using --file or in " \
