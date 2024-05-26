@@ -16,7 +16,7 @@ Path to data
 """
 state_count = 4  # 3 states implies neutral, sweep, and link; 2 states implies neutral and sweep
 cut_point = 100000  # set to zero if all data is to be used
-stoch_sims = 5
+stoch_sims = 10
 
 if state_count == 2:
     gmm_path = '../../swifr_pkg/test_data/simulations_4_swifr_2class/'
@@ -93,8 +93,6 @@ swfr_classified_1stat['swfr_class'] = swfr_classified_1stat[swifr_cols].idxmax(a
 # create a new class column and then replace the strings with numbers
 swfr_classified_1stat['swfr_class_num'] = swfr_classified_1stat['swfr_class']
 swfr_classified_1stat['swfr_class_num'] = swfr_classified_1stat['swfr_class_num'].replace(swifr_cols, [0, 1, 2, 3])
-
-xx = swfr_classified_1stat[swfr_classified_1stat['swfr_class'] == 'P(link_right)']
 
 """ 
 ---------------------------------------------------------------------------------------------------

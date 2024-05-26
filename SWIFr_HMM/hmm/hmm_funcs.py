@@ -326,7 +326,7 @@ def hmm_gamma(alpha, beta, n):
     log_gamma = a + b - m - log(sum(exp(a + b - m)))
     To Do:
     - This is currently written as though there are only two states, but it needs to be generalized to handle
-    multiple states. For instance, if there were three states, it might look like this:
+    multiple states [this has been done]. For instance, if there were three states, it might look like this:
     m_gamma = np.max(np.maximum(alpha[0] + beta[0], alpha[1] + beta[1], alpha[2) + beta[2))
     log_gamma1 = alpha[0] + beta[0] - m_gamma - np.log(np.exp(alpha[0] + beta[0] - m_gamma) + np.exp(alpha[1] + beta[1] - m_gamma + np.exp(alpha[2] + beta[2] - m_gamma))
     log_gamma2 = alpha[1] + beta[1] - m_gamma - np.log(np.exp(alpha[0] + beta[0] - m_gamma) + np.exp(alpha[1] + beta[1] - m_gamma + np.exp(alpha[2] + beta[2] - m_gamma))
@@ -427,6 +427,7 @@ def hmm_viterbi(gmm_params, data, a, pi_viterbi, stat):
     bx = np.empty(shape=(len(classes), n))
     pointer = np.empty(shape=(len(classes), n)) + -np.inf
     path = np.empty(shape=(n,))
+    path_string = np.empty(shape=(n,)).astype(str)
 
     """ build the matrix of pdf values for each class [may want to make this its own function - DO THIS] """
     for c in range(len(classes)):
@@ -485,8 +486,12 @@ def hmm_viterbi(gmm_params, data, a, pi_viterbi, stat):
     for t in reversed(range(n-1)):
         xx = int(path[t+1])
         path[t] = pointer[int(path[t+1]), t+1]
-
-    return path, delta
+        # same as state_path, but with the class labels (instead of numbers)
+        path_string[t] = classes[int(path[t])]
+    # path_string --> path defined in terms of the class names
+    # path --> path defined in terms of the class numbers
+    # delta --> fwd algo using max (instead of sum)
+    return path_string, path, delta
 
 def stochastic_backtrace_old(gmm_params, data, a, pi_stoch, stat):
     # some initializations and settings
@@ -542,7 +547,7 @@ def stochastic_backtrace_old(gmm_params, data, a, pi_stoch, stat):
                 # temp hold the values intermediate values that evaluate the probability of being in the current
                 # class when considering all possible transitions to this class.
                 temp.append(delta[cj, t - 1] + a[cj, ci])
-            # Note: this is just the fwd algo to this point. The delta output matches exactly the alpha output from
+            # Note: this is just the fwd algo to this point. The delta output_db matches exactly the alpha output_db from
             # the fwd algo.
             delta[ci, t] = bx[ci][t] + logsumexp(temp)
     # use logsumexp to correctly sum the log values. Then in delta_prob to determine the distribution of probs across
@@ -608,7 +613,7 @@ def hmm_forward_2(gmm_params, data, a, pi_fwd, stat):
                 # temp hold the values intermediate values that evaluate the probability of being in the current
                 # class when considering all possible transitions to this class.
                 temp.append(delta[cj, t - 1] + a[cj, ci])
-            # Note: this is just the fwd algo to this point. The delta output matches exactly the alpha output from
+            # Note: this is just the fwd algo to this point. The delta output_db matches exactly the alpha output_db from
             # the fwd algo.
             delta[ci, t] = bx[ci][t] + logsumexp(temp)
 
@@ -619,6 +624,7 @@ def stochastic_backtrace(gmm_params, a, delta):
     n = len(delta[0, :])
     classes = gmm_params['class'].unique()
     state_path = np.empty(shape=(n, )) * np.nan
+    state_path_str = np.empty(shape=(n, )).astype(str)
 
     # loop to catch div by zero warnings
     for ci in range(len(classes)):
@@ -627,7 +633,6 @@ def stochastic_backtrace(gmm_params, a, delta):
                 a[ci, cj] = -np.inf
             else:
                 a[ci, cj] = np.log(a[ci, cj])
-
 
     ''' normalize and randomly select the state at the last entry'''
     normalization = logsumexp(delta[:, n-1], axis=0)
@@ -657,12 +662,15 @@ def stochastic_backtrace(gmm_params, a, delta):
         p_sum.append(np.sum(Probs))
 
         state = np.random.choice(len(classes), p=Probs)
+        # note that the state number corresponds to the order of the classes (gmm_params['class'].unique())
         state_path[i] = state
+        # same as state_path, but with the class labels (instead of numbers)
+        state_path_str[i] = classes[state]
 
     p_sum_max = np.max(p_sum)
     p_sum_min = np.min(p_sum)
 
-    return state_path
+    return state_path, state_path_str
 
 def hmm_get_swifr_classes(path):
     # function to return the classes used in SWIFr (e.g., neutral, sweep, etc.)
