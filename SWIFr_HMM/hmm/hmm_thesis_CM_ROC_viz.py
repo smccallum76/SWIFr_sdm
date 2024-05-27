@@ -121,6 +121,7 @@ Confusion Matrix - 2, 3 or 4 states
 
 if do_cm == 'yes':
     """ ------------- XPEHH ------------- """
+
     fig, axs = plt.subplots(2,2, figsize=(12,10))
     cm1 = confusion_matrix(xpehh['label'], xpehh['viterbi_class_xpehh'], labels=xpehh_classes, normalize='true')
     cm2 = confusion_matrix(xpehh['label'], xpehh['viterbi_class_xpehh'], labels=xpehh_classes)
@@ -141,7 +142,7 @@ if do_cm == 'yes':
         axs[1, 0].set_title('SWIFr Classification using XP-EHH - Normalized')
         axs[1, 1].set_title('SWIFr Classification using XP-EHH - Counts')
     fig.tight_layout()
-    plt.savefig(f'plots_thesis/cm_hmm_{states}class_xpehh.svg', bbox_inches='tight')
+    plt.savefig(f'plots_thesis/cm_hmm_swifr_{states}class_xpehh.svg', bbox_inches='tight')
     plt.show()
 
     """ ------------- iHS ------------- """
@@ -166,7 +167,7 @@ if do_cm == 'yes':
         axs[1, 0].set_title('SWIFr Classification using iHS - Normalized')
         axs[1, 1].set_title('SWIFr Classification using iHS - Counts')
     fig.tight_layout()
-    plt.savefig(f'plots_thesis/cm_hmm_{states}class_ihs.svg', bbox_inches='tight')
+    plt.savefig(f'plots_thesis/cm_hmm_swifr_{states}class_ihs.svg', bbox_inches='tight')
     plt.show()
 
     """ ------------- fst ------------- """
@@ -191,7 +192,7 @@ if do_cm == 'yes':
         axs[1, 0].set_title('SWIFr Classification using fst - Normalized')
         axs[1, 1].set_title('SWIFr Classification using fst - Counts')
     fig.tight_layout()
-    plt.savefig(f'plots_thesis/cm_hmm_{states}class_fst.svg', bbox_inches='tight')
+    plt.savefig(f'plots_thesis/cm_hmm_swifr_{states}class_fst.svg', bbox_inches='tight')
     plt.show()
 
     """ ------------- SWIFr All Stats ------------- """
@@ -245,7 +246,7 @@ if do_roc == 'yes':
     plt.ylabel('True Positive Rate')
     plt.title(f'One-vs-Rest ROC curves [XP-EHH]')
     plt.legend()
-    plt.savefig(f'plots_thesis/roc_hmm_{states}class_xpehh.svg', bbox_inches='tight')
+    plt.savefig(f'plots_thesis/roc_hmm_swifr_{states}class_xpehh.svg', bbox_inches='tight')
     plt.show()
 
     """------------------ iHS ------------------ """
@@ -273,7 +274,7 @@ if do_roc == 'yes':
     plt.ylabel('True Positive Rate')
     plt.title(f'One-vs-Rest ROC curves [iHS]')
     plt.legend()
-    plt.savefig(f'plots_thesis/roc_hmm_{states}class_ihs.svg', bbox_inches='tight')
+    plt.savefig(f'plots_thesis/roc_hmm_swifr_{states}class_ihs.svg', bbox_inches='tight')
     plt.show()
 
     """------------------ fst ------------------ """
@@ -301,7 +302,7 @@ if do_roc == 'yes':
     plt.ylabel('True Positive Rate')
     plt.title(f'One-vs-Rest ROC curves [fst]')
     plt.legend()
-    plt.savefig(f'plots_thesis/roc_hmm_{states}class_fst.svg', bbox_inches='tight')
+    plt.savefig(f'plots_thesis/roc_hmm_swifr_{states}class_fst.svg', bbox_inches='tight')
     plt.show()
 
 
