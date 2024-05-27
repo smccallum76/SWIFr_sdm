@@ -30,6 +30,7 @@ table_fst = f'sbt_prediction_fst_{states}class'
 swfr_table_xpehh = 'swifr_pred_xpehh_4class'
 swfr_table_ihs = 'swifr_pred_ihs_4class'
 swfr_table_fst = 'swifr_pred_fst_4class'
+swfr_table_all = 'swifr_pred_allStats_4class'
 
 sql_xpehh = (f"""
        SELECT *
@@ -60,6 +61,12 @@ swfr_sql_fst = (f"""
        SELECT *
         FROM {swfr_table_fst}
        """)
+
+swfr_sql_all = (f"""
+       SELECT *
+        FROM {swfr_table_all}
+       """)
+
 # collect a list of the unique simulations
 xpehh = pd.read_sql(sql_xpehh, conn)
 ihs = pd.read_sql(sql_ihs, conn)
@@ -77,6 +84,7 @@ if states == 4:  # swifr comparisons only being made when using 4 states
     sxpehh = pd.read_sql(swfr_sql_xpehh, conn)
     sihs = pd.read_sql(swfr_sql_ihs, conn)
     sfst = pd.read_sql(swfr_sql_fst, conn)
+    sall = pd.read_sql(swfr_sql_all, conn)
 
     # drop null values
     sxpehh = sxpehh[sxpehh['xpehh'] != -998.0].reset_index(drop=True)
@@ -85,6 +93,10 @@ if states == 4:  # swifr comparisons only being made when using 4 states
     sihs_classes = list(sihs['label'].unique())
     sfst = sfst[sfst['fst'] != -998.0].reset_index(drop=True)
     sfst_classes = list(sfst['label'].unique())
+    sall = sall[(sall['fst'] != -998.0) |
+                (sall['xpehh'] != -998.0) |
+                (sall['ihs_afr_std'] != -998.0)].reset_index(drop=True)
+    sall_classes = list(sall['label'].unique())
 
     # add class labels for each row
     swfr_cols = ['P(neutral)', 'P(link_left)', 'P(link_right)', 'P(sweep)']
@@ -97,13 +109,18 @@ if states == 4:  # swifr comparisons only being made when using 4 states
     sfst['label_pred'] = sfst[swfr_cols].idxmax(axis=1)
     sfst['label_pred'] = sfst['label_pred'].replace(['P(neutral)', 'P(link_left)', 'P(link_right)', 'P(sweep)'],
                                           ['neutral', 'link_left', 'link_right', 'sweep'])
+    sall['label_pred'] = sall[swfr_cols].idxmax(axis=1)
+    sall['label_pred'] = sall['label_pred'].replace(['P(neutral)', 'P(link_left)', 'P(link_right)', 'P(sweep)'],
+                                          ['neutral', 'link_left', 'link_right', 'sweep'])
 
 """
 ---------------------------------------------------------------------------------------------------
 Confusion Matrix - 2, 3 or 4 states
 ---------------------------------------------------------------------------------------------------
 """
+
 if do_cm == 'yes':
+    """ ------------- XPEHH ------------- """
     fig, axs = plt.subplots(2,2, figsize=(12,10))
     cm1 = confusion_matrix(xpehh['label'], xpehh['viterbi_class_xpehh'], labels=xpehh_classes, normalize='true')
     cm2 = confusion_matrix(xpehh['label'], xpehh['viterbi_class_xpehh'], labels=xpehh_classes)
@@ -127,6 +144,7 @@ if do_cm == 'yes':
     plt.savefig(f'plots_thesis/cm_hmm_{states}class_xpehh.svg', bbox_inches='tight')
     plt.show()
 
+    """ ------------- iHS ------------- """
     fig, axs = plt.subplots(2,2, figsize=(12,10))
     ihs_classes = list(ihs['label'].unique())
     cm3 = confusion_matrix(ihs['label'], ihs['viterbi_class_ihs_afr_std'], labels=ihs_classes, normalize='true')
@@ -147,11 +165,11 @@ if do_cm == 'yes':
             include_values=True, ax=axs[1, 1], cmap='cividis')
         axs[1, 0].set_title('SWIFr Classification using iHS - Normalized')
         axs[1, 1].set_title('SWIFr Classification using iHS - Counts')
-
     fig.tight_layout()
     plt.savefig(f'plots_thesis/cm_hmm_{states}class_ihs.svg', bbox_inches='tight')
     plt.show()
 
+    """ ------------- fst ------------- """
     fig, axs = plt.subplots(2,2, figsize=(12,10))
     fst_classes = list(fst['label'].unique())
     cm5 = confusion_matrix(fst['label'], fst['viterbi_class_fst'], labels=fst_classes, normalize='true')
@@ -176,6 +194,22 @@ if do_cm == 'yes':
     plt.savefig(f'plots_thesis/cm_hmm_{states}class_fst.svg', bbox_inches='tight')
     plt.show()
 
+    """ ------------- SWIFr All Stats ------------- """
+    if states == 4:
+        fig, axs = plt.subplots(1,2, figsize=(12,6))
+        cm1 = confusion_matrix(sall['label'], sall['label_pred'], labels=sall_classes, normalize='true')
+        cm2 = confusion_matrix(sall['label'], sall['label_pred'], labels=sall_classes)
+        ConfusionMatrixDisplay(confusion_matrix=cm1, display_labels=sall_classes).plot(
+            include_values=True, ax=axs[0], cmap='cividis')
+        ConfusionMatrixDisplay(confusion_matrix=cm2, display_labels=sall_classes).plot(
+            include_values=True, ax=axs[1], cmap='cividis')
+        axs[0].set_title('SWIFr Classification using All Stats - Normalized')
+        axs[1].set_title('SWIFr Classification using All Stats - Counts')
+
+        fig.tight_layout()
+        plt.savefig(f'plots_thesis/cm_swifr_{states}class_allStats.svg', bbox_inches='tight')
+        plt.show()
+
 """ 
 ---------------------------------------------------------------------------------------------------
 ROC - need to make a function [macro averaging] - using average of all probs
@@ -189,9 +223,6 @@ if do_roc == 'yes':
     """------------------ XP-EHH ------------------ """
     # dummy var for HMM
     y_onehot_test = pd.get_dummies(xpehh['label'], dtype=int)
-    # dummy var for SWIFr
-    y_onehot_test2 = pd.get_dummies(sxpehh['label'], dtype=int)
-
     # initialize figure
     plt.figure(figsize=(9, 7))
     for i, j in enumerate(xpehh_classes):  # HMM ROC Curve Loop
@@ -200,6 +231,8 @@ if do_roc == 'yes':
         plt.plot(fpr, tpr, color=colors[i], label=f'HMM {j} vs Rest (AUC) = ' + str(round(auc, 2)))
         # swifr plot IF the state count is 4
         if len(sxpehh) > 0:
+            # dummy var for SWIFr
+            y_onehot_test2 = pd.get_dummies(sxpehh['label'], dtype=int)
             fpr2, tpr2, thresh2 = roc_curve(y_onehot_test2.loc[:, j], sxpehh[f"P({j})"], pos_label=1)
             auc = roc_auc_score(y_onehot_test2.loc[:, j], sxpehh[f"P({j})"])
             plt.plot(fpr2, tpr2, color=colors[i], linestyle='dashed',
@@ -218,9 +251,6 @@ if do_roc == 'yes':
     """------------------ iHS ------------------ """
     # dummy var for HMM
     y_onehot_test = pd.get_dummies(ihs['label'], dtype=int)
-    # dummy var for SWIFr
-    y_onehot_test2 = pd.get_dummies(sihs['label'], dtype=int)
-
     # initialize figure
     plt.figure(figsize=(9, 7))
     for i, j in enumerate(ihs_classes):  # HMM ROC Curve Loop
@@ -229,6 +259,8 @@ if do_roc == 'yes':
         plt.plot(fpr, tpr, color=colors[i], label=f'HMM {j} vs Rest (AUC) = ' + str(round(auc, 2)))
         # swifr plot IF the state count is 4
         if len(sihs) > 0:
+            # dummy var for SWIFr
+            y_onehot_test2 = pd.get_dummies(sihs['label'], dtype=int)
             fpr2, tpr2, thresh2 = roc_curve(y_onehot_test2.loc[:, j], sihs[f"P({j})"], pos_label=1)
             auc = roc_auc_score(y_onehot_test2.loc[:, j], sihs[f"P({j})"])
             plt.plot(fpr2, tpr2, color=colors[i], linestyle='dashed',
@@ -247,9 +279,6 @@ if do_roc == 'yes':
     """------------------ fst ------------------ """
     # dummy var for HMM
     y_onehot_test = pd.get_dummies(fst['label'], dtype=int)
-    # dummy var for SWIFr
-    y_onehot_test2 = pd.get_dummies(sfst['label'], dtype=int)
-
     # initialize figure
     plt.figure(figsize=(9, 7))
     for i, j in enumerate(fst_classes):  # HMM ROC Curve Loop
@@ -258,6 +287,8 @@ if do_roc == 'yes':
         plt.plot(fpr, tpr, color=colors[i], label=f'HMM {j} vs Rest (AUC) = ' + str(round(auc, 2)))
         # swifr plot IF the state count is 4
         if len(sfst) > 0:
+            # dummy var for SWIFr
+            y_onehot_test2 = pd.get_dummies(sfst['label'], dtype=int)
             fpr2, tpr2, thresh2 = roc_curve(y_onehot_test2.loc[:, j], sfst[f"P({j})"], pos_label=1)
             auc = roc_auc_score(y_onehot_test2.loc[:, j], sfst[f"P({j})"])
             plt.plot(fpr2, tpr2, color=colors[i], linestyle='dashed',

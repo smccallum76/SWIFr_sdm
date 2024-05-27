@@ -206,7 +206,7 @@ if __name__ == '__main__':
 	parser.add_argument('--train',action='store_true',dest='learn')
 	parser.add_argument('--input_train',action='store',dest='input_train') #file with training data, required for --learn (2 columns, no headers. first column is true values 0=neutral, 1=sweep. second column is uncalibrated probabilities)
 	parser.add_argument('--apply',action='store_true',dest='apply')
-	parser.add_argument('--input_apply',action='store',dest='input_apply') #file with any number of tab-delimited columns, with header line. One header line must be "uncalibrated". output will make a new file that adds an additional column called "calibrated"
+	parser.add_argument('--input_apply',action='store',dest='input_apply') #file with any number of tab-delimited columns, with header line. One header line must be "uncalibrated". output_db will make a new file that adds an additional column called "calibrated"
 	args = parser.parse_args()
 	C = SmoothedIsotonicCalibration()
 
