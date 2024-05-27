@@ -17,8 +17,9 @@ from sklearn.metrics import roc_curve, roc_auc_score
 Extract data from the SQLite DB for visualizations 
 -----------------------------------------------------------------------------------------------------------------------
 '''
-states = 3 # change from 2, 3, or 4 states
-do_cm = 'no'
+states = 4  # change from 2, 3, or 4 states
+do_cm = 'yes'
+do_roc = 'yes'
 
 path = 'C:/Users/scott/PycharmProjects/SWIFr_sdm/SWIFr_HMM/hmm/output_db/'
 conn = sqlite3.connect(path + 'hmm_predictions.db')
@@ -26,6 +27,9 @@ conn = sqlite3.connect(path + 'hmm_predictions.db')
 table_xpehh = f'sbt_prediction_xpehh_{states}class'
 table_ihs = f'sbt_prediction_ihs_afr_std_{states}class'
 table_fst = f'sbt_prediction_fst_{states}class'
+swfr_table_xpehh = 'swifr_pred_xpehh_4class'
+swfr_table_ihs = 'swifr_pred_ihs_4class'
+swfr_table_fst = 'swifr_pred_fst_4class'
 
 sql_xpehh = (f"""
        SELECT *
@@ -41,10 +45,26 @@ sql_fst = (f"""
        SELECT *
         FROM {table_fst}
        """)
+
+swfr_sql_xpehh = (f"""
+       SELECT *
+        FROM {swfr_table_xpehh}
+       """)
+
+swfr_sql_ihs = (f"""
+       SELECT *
+        FROM {swfr_table_ihs}
+       """)
+
+swfr_sql_fst = (f"""
+       SELECT *
+        FROM {swfr_table_fst}
+       """)
 # collect a list of the unique simulations
 xpehh = pd.read_sql(sql_xpehh, conn)
 ihs = pd.read_sql(sql_ihs, conn)
 fst = pd.read_sql(sql_fst, conn)
+
 # drop nans prior to analysis
 xpehh = xpehh[xpehh['xpehh'] != -998.0].reset_index(drop=True)
 xpehh_classes = list(xpehh['label'].unique())
@@ -52,6 +72,31 @@ ihs = ihs[ihs['ihs_afr_std'] != -998.0].reset_index(drop=True)
 ihs_classes = list(ihs['label'].unique())
 fst = fst[fst['fst'] != -998.0].reset_index(drop=True)
 fst_classes = list(fst['label'].unique())
+# swifr tables
+if states == 4:  # swifr comparisons only being made when using 4 states
+    sxpehh = pd.read_sql(swfr_sql_xpehh, conn)
+    sihs = pd.read_sql(swfr_sql_ihs, conn)
+    sfst = pd.read_sql(swfr_sql_fst, conn)
+
+    # drop null values
+    sxpehh = sxpehh[sxpehh['xpehh'] != -998.0].reset_index(drop=True)
+    sxpehh_classes = list(sxpehh['label'].unique())
+    sihs = sihs[sihs['ihs_afr_std'] != -998.0].reset_index(drop=True)
+    sihs_classes = list(sihs['label'].unique())
+    sfst = sfst[sfst['fst'] != -998.0].reset_index(drop=True)
+    sfst_classes = list(sfst['label'].unique())
+
+    # add class labels for each row
+    swfr_cols = ['P(neutral)', 'P(link_left)', 'P(link_right)', 'P(sweep)']
+    sxpehh['label_pred'] = sxpehh[swfr_cols].idxmax(axis=1)
+    sxpehh['label_pred'] = sxpehh['label_pred'].replace(['P(neutral)', 'P(link_left)', 'P(link_right)', 'P(sweep)'],
+                                          ['neutral', 'link_left', 'link_right', 'sweep'])
+    sihs['label_pred'] = sihs[swfr_cols].idxmax(axis=1)
+    sihs['label_pred'] = sihs['label_pred'].replace(['P(neutral)', 'P(link_left)', 'P(link_right)', 'P(sweep)'],
+                                          ['neutral', 'link_left', 'link_right', 'sweep'])
+    sfst['label_pred'] = sfst[swfr_cols].idxmax(axis=1)
+    sfst['label_pred'] = sfst['label_pred'].replace(['P(neutral)', 'P(link_left)', 'P(link_right)', 'P(sweep)'],
+                                          ['neutral', 'link_left', 'link_right', 'sweep'])
 
 """
 ---------------------------------------------------------------------------------------------------
@@ -59,42 +104,76 @@ Confusion Matrix - 2, 3 or 4 states
 ---------------------------------------------------------------------------------------------------
 """
 if do_cm == 'yes':
-    fig, axs = plt.subplots(1,2, figsize=(12,6))
+    fig, axs = plt.subplots(2,2, figsize=(12,10))
     cm1 = confusion_matrix(xpehh['label'], xpehh['viterbi_class_xpehh'], labels=xpehh_classes, normalize='true')
     cm2 = confusion_matrix(xpehh['label'], xpehh['viterbi_class_xpehh'], labels=xpehh_classes)
     ConfusionMatrixDisplay(confusion_matrix=cm1, display_labels=xpehh_classes).plot(
-        include_values=True, ax=axs[0], cmap='cividis')
+        include_values=True, ax=axs[0, 0], cmap='cividis')
     ConfusionMatrixDisplay(confusion_matrix=cm2, display_labels=xpehh_classes).plot(
-        include_values=True, ax=axs[1], cmap='cividis')
-    axs[0].set_title('Path using XP-EHH - Normalized')
-    axs[1].set_title('Path using XP-EHH - Counts')
+        include_values=True, ax=axs[0, 1], cmap='cividis')
+    axs[0, 0].set_title('HMM Classification using XP-EHH - Normalized')
+    axs[0, 1].set_title('HMM Classification using XP-EHH - Counts')
+
+    if states == 4:
+        cm3 = confusion_matrix(sxpehh['label'], sxpehh['label_pred'], labels=sxpehh_classes, normalize='true')
+        cm4 = confusion_matrix(sxpehh['label'], sxpehh['label_pred'], labels=sxpehh_classes)
+        ConfusionMatrixDisplay(confusion_matrix=cm3, display_labels=sxpehh_classes).plot(
+            include_values=True, ax=axs[1, 0], cmap='cividis')
+        ConfusionMatrixDisplay(confusion_matrix=cm4, display_labels=sxpehh_classes).plot(
+            include_values=True, ax=axs[1, 1], cmap='cividis')
+        axs[1, 0].set_title('SWIFr Classification using XP-EHH - Normalized')
+        axs[1, 1].set_title('SWIFr Classification using XP-EHH - Counts')
     fig.tight_layout()
+    plt.savefig(f'plots_thesis/cm_hmm_{states}class_xpehh.svg', bbox_inches='tight')
     plt.show()
 
-    fig, axs = plt.subplots(1,2, figsize=(12,6))
+    fig, axs = plt.subplots(2,2, figsize=(12,10))
     ihs_classes = list(ihs['label'].unique())
     cm3 = confusion_matrix(ihs['label'], ihs['viterbi_class_ihs_afr_std'], labels=ihs_classes, normalize='true')
     cm4 = confusion_matrix(ihs['label'], ihs['viterbi_class_ihs_afr_std'], labels=ihs_classes)
     ConfusionMatrixDisplay(confusion_matrix=cm3, display_labels=ihs_classes).plot(
-        include_values=True, ax=axs[0], cmap='cividis')
+        include_values=True, ax=axs[0, 0], cmap='cividis')
     ConfusionMatrixDisplay(confusion_matrix=cm4, display_labels=ihs_classes).plot(
-        include_values=True, ax=axs[1], cmap='cividis')
-    axs[0].set_title('Path using iHS - Normalized')
-    axs[1].set_title('Path using iHS - Counts')
+        include_values=True, ax=axs[0, 1], cmap='cividis')
+    axs[0, 0].set_title('HMM Classification using iHS - Normalized')
+    axs[0, 1].set_title('HMM Classification using iHS - Counts')
+
+    if states == 4:
+        cm3 = confusion_matrix(sihs['label'], sihs['label_pred'], labels=sihs_classes, normalize='true')
+        cm4 = confusion_matrix(sihs['label'], sihs['label_pred'], labels=sihs_classes)
+        ConfusionMatrixDisplay(confusion_matrix=cm3, display_labels=sihs_classes).plot(
+            include_values=True, ax=axs[1, 0], cmap='cividis')
+        ConfusionMatrixDisplay(confusion_matrix=cm4, display_labels=sihs_classes).plot(
+            include_values=True, ax=axs[1, 1], cmap='cividis')
+        axs[1, 0].set_title('SWIFr Classification using iHS - Normalized')
+        axs[1, 1].set_title('SWIFr Classification using iHS - Counts')
+
     fig.tight_layout()
+    plt.savefig(f'plots_thesis/cm_hmm_{states}class_ihs.svg', bbox_inches='tight')
     plt.show()
 
-    fig, axs = plt.subplots(1,2, figsize=(12,6))
+    fig, axs = plt.subplots(2,2, figsize=(12,10))
     fst_classes = list(fst['label'].unique())
     cm5 = confusion_matrix(fst['label'], fst['viterbi_class_fst'], labels=fst_classes, normalize='true')
     cm6 = confusion_matrix(fst['label'], fst['viterbi_class_fst'], labels=fst_classes)
     ConfusionMatrixDisplay(confusion_matrix=cm5, display_labels=fst_classes).plot(
-        include_values=True, ax=axs[0], cmap='cividis')
+        include_values=True, ax=axs[0, 0], cmap='cividis')
     ConfusionMatrixDisplay(confusion_matrix=cm6, display_labels=fst_classes).plot(
-        include_values=True, ax=axs[1], cmap='cividis')
-    axs[0].set_title('Path using fst - Normalized')
-    axs[1].set_title('Path using fst - Counts')
+        include_values=True, ax=axs[0, 1], cmap='cividis')
+    axs[0, 0].set_title('HMM Classification using fst - Normalized')
+    axs[0, 1].set_title('HMM Classification using fst - Counts')
+
+    if states == 4:
+        cm3 = confusion_matrix(sfst['label'], sfst['label_pred'], labels=sfst_classes, normalize='true')
+        cm4 = confusion_matrix(sfst['label'], sfst['label_pred'], labels=sfst_classes)
+        ConfusionMatrixDisplay(confusion_matrix=cm3, display_labels=sfst_classes).plot(
+            include_values=True, ax=axs[1, 0], cmap='cividis')
+        ConfusionMatrixDisplay(confusion_matrix=cm4, display_labels=sfst_classes).plot(
+            include_values=True, ax=axs[1, 1], cmap='cividis')
+        axs[1, 0].set_title('SWIFr Classification using fst - Normalized')
+        axs[1, 1].set_title('SWIFr Classification using fst - Counts')
     fig.tight_layout()
+    plt.savefig(f'plots_thesis/cm_hmm_{states}class_fst.svg', bbox_inches='tight')
     plt.show()
 
 """ 
@@ -102,31 +181,98 @@ if do_cm == 'yes':
 ROC - need to make a function [macro averaging] - using average of all probs
 ---------------------------------------------------------------------------------------------------
 """
-# Unique classes
-colors = ['magenta', 'dodgerblue', 'darkviolet', 'blue']  # enough for four classes
 
-# dummy var for HMM
-y_onehot_test = pd.get_dummies(xpehh['label'], dtype=int)
-# dummy var for SWIFr
-# y_onehot_test2 = pd.get_dummies(swfr_classified['label_num'], dtype=int)
+if do_roc == 'yes':
+    # Unique classes
+    colors = ['magenta', 'dodgerblue', 'darkviolet', 'blue']  # enough for four classes
 
-# initialize figure
-plt.figure(figsize=(9, 7))
-for i, j in enumerate(xpehh_classes):  # HMM ROC Curve Loop
-    fpr, tpr, thresh = roc_curve(y_onehot_test.loc[:, j], xpehh[f"P({j}_xpehh)"], pos_label=1)
-    auc = roc_auc_score(y_onehot_test.loc[:, j], xpehh[f"P({j}_xpehh)"])
-    plt.plot(fpr, tpr, color=colors[i], label=f'HMM {j} vs Rest (AUC) = ' + str(round(auc, 2)))
+    """------------------ XP-EHH ------------------ """
+    # dummy var for HMM
+    y_onehot_test = pd.get_dummies(xpehh['label'], dtype=int)
+    # dummy var for SWIFr
+    y_onehot_test2 = pd.get_dummies(sxpehh['label'], dtype=int)
 
-# plot the chance curve
-plt.plot(np.linspace(0, 1, 50 ), np.linspace(0, 1, 50), color='black',
-         linestyle='dashed', label='Chance Level (AUC) = 0.50')
-plt.xlabel('False Positive Rate')
-plt.ylabel('True Positive Rate')
-plt.title(f'One-vs-Rest ROC curves [XP-EHH]')
-plt.legend()
-plt.show()
+    # initialize figure
+    plt.figure(figsize=(9, 7))
+    for i, j in enumerate(xpehh_classes):  # HMM ROC Curve Loop
+        fpr, tpr, thresh = roc_curve(y_onehot_test.loc[:, j], xpehh[f"P({j}_xpehh)"], pos_label=1)
+        auc = roc_auc_score(y_onehot_test.loc[:, j], xpehh[f"P({j}_xpehh)"])
+        plt.plot(fpr, tpr, color=colors[i], label=f'HMM {j} vs Rest (AUC) = ' + str(round(auc, 2)))
+        # swifr plot IF the state count is 4
+        if len(sxpehh) > 0:
+            fpr2, tpr2, thresh2 = roc_curve(y_onehot_test2.loc[:, j], sxpehh[f"P({j})"], pos_label=1)
+            auc = roc_auc_score(y_onehot_test2.loc[:, j], sxpehh[f"P({j})"])
+            plt.plot(fpr2, tpr2, color=colors[i], linestyle='dashed',
+                     label=f'SWIFr {j} vs Rest (AUC) = ' + str(round(auc, 2)))
 
-print('done')
+    # plot the chance curve
+    plt.plot(np.linspace(0, 1, 50 ), np.linspace(0, 1, 50), color='black',
+             linestyle='dashed', label='Chance Level (AUC) = 0.50')
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title(f'One-vs-Rest ROC curves [XP-EHH]')
+    plt.legend()
+    plt.savefig(f'plots_thesis/roc_hmm_{states}class_xpehh.svg', bbox_inches='tight')
+    plt.show()
+
+    """------------------ iHS ------------------ """
+    # dummy var for HMM
+    y_onehot_test = pd.get_dummies(ihs['label'], dtype=int)
+    # dummy var for SWIFr
+    y_onehot_test2 = pd.get_dummies(sihs['label'], dtype=int)
+
+    # initialize figure
+    plt.figure(figsize=(9, 7))
+    for i, j in enumerate(ihs_classes):  # HMM ROC Curve Loop
+        fpr, tpr, thresh = roc_curve(y_onehot_test.loc[:, j], ihs[f"P({j}_ihs_afr_std)"], pos_label=1)
+        auc = roc_auc_score(y_onehot_test.loc[:, j], ihs[f"P({j}_ihs_afr_std)"])
+        plt.plot(fpr, tpr, color=colors[i], label=f'HMM {j} vs Rest (AUC) = ' + str(round(auc, 2)))
+        # swifr plot IF the state count is 4
+        if len(sihs) > 0:
+            fpr2, tpr2, thresh2 = roc_curve(y_onehot_test2.loc[:, j], sihs[f"P({j})"], pos_label=1)
+            auc = roc_auc_score(y_onehot_test2.loc[:, j], sihs[f"P({j})"])
+            plt.plot(fpr2, tpr2, color=colors[i], linestyle='dashed',
+                     label=f'SWIFr {j} vs Rest (AUC) = ' + str(round(auc, 2)))
+
+    # plot the chance curve
+    plt.plot(np.linspace(0, 1, 50 ), np.linspace(0, 1, 50), color='black',
+             linestyle='dashed', label='Chance Level (AUC) = 0.50')
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title(f'One-vs-Rest ROC curves [iHS]')
+    plt.legend()
+    plt.savefig(f'plots_thesis/roc_hmm_{states}class_ihs.svg', bbox_inches='tight')
+    plt.show()
+
+    """------------------ fst ------------------ """
+    # dummy var for HMM
+    y_onehot_test = pd.get_dummies(fst['label'], dtype=int)
+    # dummy var for SWIFr
+    y_onehot_test2 = pd.get_dummies(sfst['label'], dtype=int)
+
+    # initialize figure
+    plt.figure(figsize=(9, 7))
+    for i, j in enumerate(fst_classes):  # HMM ROC Curve Loop
+        fpr, tpr, thresh = roc_curve(y_onehot_test.loc[:, j], fst[f"P({j}_fst)"], pos_label=1)
+        auc = roc_auc_score(y_onehot_test.loc[:, j], fst[f"P({j}_fst)"])
+        plt.plot(fpr, tpr, color=colors[i], label=f'HMM {j} vs Rest (AUC) = ' + str(round(auc, 2)))
+        # swifr plot IF the state count is 4
+        if len(sfst) > 0:
+            fpr2, tpr2, thresh2 = roc_curve(y_onehot_test2.loc[:, j], sfst[f"P({j})"], pos_label=1)
+            auc = roc_auc_score(y_onehot_test2.loc[:, j], sfst[f"P({j})"])
+            plt.plot(fpr2, tpr2, color=colors[i], linestyle='dashed',
+                     label=f'SWIFr {j} vs Rest (AUC) = ' + str(round(auc, 2)))
+
+    # plot the chance curve
+    plt.plot(np.linspace(0, 1, 50 ), np.linspace(0, 1, 50), color='black',
+             linestyle='dashed', label='Chance Level (AUC) = 0.50')
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title(f'One-vs-Rest ROC curves [fst]')
+    plt.legend()
+    plt.savefig(f'plots_thesis/roc_hmm_{states}class_fst.svg', bbox_inches='tight')
+    plt.show()
+
 
 
 
