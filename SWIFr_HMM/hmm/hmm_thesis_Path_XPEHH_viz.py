@@ -31,8 +31,6 @@ path = 'C:/Users/scott/PycharmProjects/SWIFr_sdm/SWIFr_HMM/hmm/output_db/'
 conn = sqlite3.connect(path + 'hmm_predictions.db')
 # table names that contain the stochastic backtrace, viterbi, and gamms
 table_xpehh = f'sbt_prediction_xpehh_4class'
-table_ihs = f'sbt_prediction_ihs_afr_std_4class'
-table_fst = f'sbt_prediction_fst_4class'
 swfr_table_xpehh = 'swifr_pred_xpehh_4class'
 swfr_table_ihs = 'swifr_pred_ihs_4class'
 swfr_table_fst = 'swifr_pred_fst_4class'
@@ -42,16 +40,6 @@ sql_xpehh = (f"""
        SELECT *
         FROM {table_xpehh}
         WHERE vcf_name IN ('ts_sweep_10.vcf')
-       """)
-
-sql_ihs = (f"""
-       SELECT *
-        FROM {table_ihs}
-       """)
-
-sql_fst = (f"""
-       SELECT *
-        FROM {table_fst}
        """)
 
 swfr_sql_xpehh = (f"""
@@ -77,48 +65,42 @@ swfr_sql_all = (f"""
 
 # collect a list of the unique simulations
 xpehh = pd.read_sql(sql_xpehh, conn)
-# ihs = pd.read_sql(sql_ihs, conn)
-# fst = pd.read_sql(sql_fst, conn)
-#
-# # drop nans prior to analysis
+
+# drop nans prior to analysis
 xpehh = xpehh[xpehh['xpehh'] != -998.0].reset_index(drop=True)
 xpehh_classes = list(xpehh['label'].unique())
-# ihs = ihs[ihs['ihs_afr_std'] != -998.0].reset_index(drop=True)
-# ihs_classes = list(ihs['label'].unique())
-# fst = fst[fst['fst'] != -998.0].reset_index(drop=True)
-# fst_classes = list(fst['label'].unique())
-# # swifr data
+
+# swifr data
 sxpehh = pd.read_sql(swfr_sql_xpehh, conn)
-# sihs = pd.read_sql(swfr_sql_ihs, conn)
-# sfst = pd.read_sql(swfr_sql_fst, conn)
-# sall = pd.read_sql(swfr_sql_all, conn)
-# # drop null values
+sihs = pd.read_sql(swfr_sql_ihs, conn)
+sfst = pd.read_sql(swfr_sql_fst, conn)
+sall = pd.read_sql(swfr_sql_all, conn)
+# drop null values
 sxpehh = sxpehh[sxpehh['xpehh'] != -998.0].reset_index(drop=True)
 sxpehh_classes = list(sxpehh['label'].unique())
-# sihs = sihs[sihs['ihs_afr_std'] != -998.0].reset_index(drop=True)
-# sihs_classes = list(sihs['label'].unique())
-# sfst = sfst[sfst['fst'] != -998.0].reset_index(drop=True)
-# sfst_classes = list(sfst['label'].unique())
-# sall = sall[(sall['fst'] != -998.0) |
-#             (sall['xpehh'] != -998.0) |
-#             (sall['ihs_afr_std'] != -998.0)].reset_index(drop=True)
-# sall_classes = list(sall['label'].unique())
-# # add class labels for each row
+sihs = sihs[sihs['ihs_afr_std'] != -998.0].reset_index(drop=True)
+sihs_classes = list(sihs['label'].unique())
+sfst = sfst[sfst['fst'] != -998.0].reset_index(drop=True)
+sfst_classes = list(sfst['label'].unique())
+# all swifer data
+sall = sall[(sall['fst'] != -998.0) |
+            (sall['xpehh'] != -998.0) |
+            (sall['ihs_afr_std'] != -998.0)].reset_index(drop=True)
+sall_classes = list(sall['label'].unique())
+# add class labels for each row
 swfr_cols = ['P(neutral)', 'P(link_left)', 'P(link_right)', 'P(sweep)']
 sxpehh['label_pred'] = sxpehh[swfr_cols].idxmax(axis=1)
 sxpehh['label_pred'] = sxpehh['label_pred'].replace(['P(neutral)', 'P(link_left)', 'P(link_right)', 'P(sweep)'],
                                       ['neutral', 'link_left', 'link_right', 'sweep'])
-
-
-# sihs['label_pred'] = sihs[swfr_cols].idxmax(axis=1)
-# sihs['label_pred'] = sihs['label_pred'].replace(['P(neutral)', 'P(link_left)', 'P(link_right)', 'P(sweep)'],
-#                                       ['neutral', 'link_left', 'link_right', 'sweep'])
-# sfst['label_pred'] = sfst[swfr_cols].idxmax(axis=1)
-# sfst['label_pred'] = sfst['label_pred'].replace(['P(neutral)', 'P(link_left)', 'P(link_right)', 'P(sweep)'],
-#                                       ['neutral', 'link_left', 'link_right', 'sweep'])
-# sall['label_pred'] = sall[swfr_cols].idxmax(axis=1)
-# sall['label_pred'] = sall['label_pred'].replace(['P(neutral)', 'P(link_left)', 'P(link_right)', 'P(sweep)'],
-#                                       ['neutral', 'link_left', 'link_right', 'sweep'])
+sihs['label_pred'] = sihs[swfr_cols].idxmax(axis=1)
+sihs['label_pred'] = sihs['label_pred'].replace(['P(neutral)', 'P(link_left)', 'P(link_right)', 'P(sweep)'],
+                                      ['neutral', 'link_left', 'link_right', 'sweep'])
+sfst['label_pred'] = sfst[swfr_cols].idxmax(axis=1)
+sfst['label_pred'] = sfst['label_pred'].replace(['P(neutral)', 'P(link_left)', 'P(link_right)', 'P(sweep)'],
+                                      ['neutral', 'link_left', 'link_right', 'sweep'])
+sall['label_pred'] = sall[swfr_cols].idxmax(axis=1)
+sall['label_pred'] = sall['label_pred'].replace(['P(neutral)', 'P(link_left)', 'P(link_right)', 'P(sweep)'],
+                                      ['neutral', 'link_left', 'link_right', 'sweep'])
 
 """ 
 ---------------------------------------------------------------------------------------------------
