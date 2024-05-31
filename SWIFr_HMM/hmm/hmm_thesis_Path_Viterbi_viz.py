@@ -49,7 +49,7 @@ sql_fst = (f"""
 swfr_sql_xpehh = (f"""
        SELECT *
         FROM {swfr_table_xpehh}
-        WHERE vcf_name = 'ts_sweep_0.vcf'
+        WHERE vcf_name = 'ts_sweep_1.vcf'
        """)
 
 swfr_sql_ihs = (f"""
@@ -115,9 +115,17 @@ sxpehh['label_pred'] = sxpehh['label_pred'].replace(['P(neutral)', 'P(link_left)
 Plot -- Path and stat comparison [flashlight plot]
 ---------------------------------------------------------------------------------------------------
 """
+state2num = {'label_actual': {'neutral': 0, 'link_left': 1, 'link_right': 2, 'sweep': 3}}
+state2numPred = {'viterbi_class_xpehh_num': {'neutral': 0, 'link_left': 1, 'link_right': 2, 'sweep': 3}}
+
+xpehh['label_actual'] = xpehh['label']
+xpehh['viterbi_class_xpehh_num'] = xpehh['viterbi_class_xpehh']
+xpehh = xpehh.replace(state2num)
+xpehh = xpehh.replace(state2numPred)
+
 xs = np.arange(0, len(xpehh), 1)
 xs2 = np.arange(0, len(sxpehh), 1)
-cmap = mpl.colormaps['viridis']
+cmap = mpl.colormaps['cool']
 legend_colors = cmap(np.linspace(0, 1, len(xpehh_classes)))
 colors = ['magenta', 'dodgerblue', 'darkviolet', 'blue']  # enough for four classes
 
@@ -126,13 +134,16 @@ gs = fig.add_gridspec(5, hspace=0)
 axs = gs.subplots(sharex=True, sharey=False)
 fig.suptitle(f'Actual Path, Predicted Path, and XP-EHH')
 # axs[0].plot(xs, xpehh['label'], color='black')
-axs[0].scatter(xs, [0]*len(xs), c=xpehh['label'], cmap='magma')
+axs[0].scatter(xs, [0]*len(xs), c=xpehh['label_actual'], cmap='cool', marker=",", s=10)
+axs[0].axvline(x=xpehh[xpehh['label']=='sweep'].index, color='black', label='Sweep Position')
 # axs[0].scatter(xs, xpehh['label'], c=colors, cmap='viridis', edgecolor='none', s=30)
 # axs[0].scatter(xs, xpehh['label'], s=30)
 
-axs[1].plot(xs, xpehh['viterbi_class_xpehh'], color='black')
+# axs[1].plot(xs, xpehh['viterbi_class_xpehh'], color='black')
+axs[1].scatter(xs, [1]*len(xs), c=xpehh['viterbi_class_xpehh_num'], cmap='cool', marker=",", s=10)
+axs[1].axvline(x=xpehh[xpehh['label']=='sweep'].index, color='black', label='Sweep Position')
 # axs[1].scatter(xs, xpehh['viterbi_class_xpehh'], c=colors, cmap='viridis', edgecolor='none', s=30)
-axs[1].scatter(xs, xpehh['viterbi_class_xpehh'],  s=30)
+# axs[1].scatter(xs, xpehh['viterbi_class_xpehh'],  s=30)
 for i in range(100):
     axs[2].plot(xs, xpehh.loc[:, f'sb_{i}'], color='lightgrey')
 # axs[2].scatter(xs, sb_paths, c=sb_paths,cmap='viridis', edgecolor='none', s=30)
@@ -155,11 +166,11 @@ for ax in axs:
 
 legend_elements = [Line2D([0], [0], marker='o', color='w', label='0: Neutral',
                           markerfacecolor=legend_colors[0], markersize=15),
-                   Line2D([0], [0], marker='o', color='w', label='1: Sweep',
+                   Line2D([0], [0], marker='o', color='w', label='1: Link_Left',
                           markerfacecolor=legend_colors[1], markersize=15),
-                   Line2D([0], [0], marker='o', color='w', label='2: Link_Left',
+                   Line2D([0], [0], marker='o', color='w', label='2: Link_Right',
                           markerfacecolor=legend_colors[2], markersize=15),
-                   Line2D([0], [0], marker='o', color='w', label='3: Link_Right',
+                   Line2D([0], [0], marker='o', color='w', label='3: Sweep',
                           markerfacecolor=legend_colors[3], markersize=15)]
 
 axs[0].legend(handles=legend_elements, loc='upper left')
