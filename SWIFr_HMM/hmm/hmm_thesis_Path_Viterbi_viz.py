@@ -122,67 +122,84 @@ sxpehh['label_pred'] = sxpehh['label_pred'].replace(['P(neutral)', 'P(link_left)
 
 """ 
 ---------------------------------------------------------------------------------------------------
-Plot -- Path and stat comparison [flashlight plot]
+XP-EHH Path Plot
 ---------------------------------------------------------------------------------------------------
 """
-# xs = np.arange(0, len(xpehh), 1)
-# xs2 = np.arange(0, len(sxpehh), 1)
-
+# size of markers for scatter plots
+size = 50
+# define x axes for brevity
 xs = xpehh['snp_position']
 xs2 = sxpehh['snp_position']
+# define colormap approved by addy
 cmap = mpl.colormaps['cool']
+# define legend
 legend_colors = cmap(np.linspace(0, 1, len(xpehh_classes)))
-
+# initialize the figure space
 fig = plt.figure(figsize=(18, 8))
 gs = fig.add_gridspec(5, hspace=0)
 axs = gs.subplots(sharex=True, sharey=False)
-fig.suptitle(f'Actual Path, Predicted Path, and XP-EHH')
+fig.suptitle('XP-EHH: Actual Path, Viterbi Path, Stochastic Backtrace, and XP-EHH Statistic')
 
+''' Actual Path '''
+# relabeling strings as numbers for plotting purposes
 state2numColor = {'label_actual_color': {'neutral': 0, 'link_left': 1, 'link_right': 2, 'sweep': 3}}
 state2numPlot = {'label_actual_plot': {'neutral': 0, 'link_left': 1, 'link_right': 1, 'sweep': 2}}
 xpehh['label_actual_color'] = xpehh['label']
 xpehh['label_actual_plot'] = xpehh['label']
 xpehh = xpehh.replace(state2numColor)
 xpehh = xpehh.replace(state2numPlot)
+# generate the actual path plots
 axs[0].axvline(x=2.5e6, color='black')
 axs[0].plot(xs, xpehh['label_actual_plot'], color='lightgrey', alpha=0.5)
 axs[0].scatter(xs, xpehh['label_actual_plot'], c=xpehh['label_actual_color'],
-               cmap='cool', edgecolor='none', s=30, alpha=0.7)
+               cmap='cool', edgecolor='none', s=size, alpha=0.7)
 
-state2numColor = {'viterbi_class_xpehh_plot': {'neutral': 0, 'link_left': 1, 'link_right': 1, 'sweep': 2}}
-state2numPlot = {'viterbi_class_xpehh_color': {'neutral': 0, 'link_left': 1, 'link_right': 2, 'sweep': 3}}
+''' Viterbi Path '''
+# relabeling strings as numbers for plotting purposes
+state2numColor = {'viterbi_class_xpehh_color': {'neutral': 0, 'link_left': 1, 'link_right': 2, 'sweep': 3}}
+state2numPlot = {'viterbi_class_xpehh_plot': {'neutral': 0, 'link_left': 1, 'link_right': 1, 'sweep': 2}}
 xpehh['viterbi_class_xpehh_plot'] = xpehh['viterbi_class_xpehh']
 xpehh['viterbi_class_xpehh_color'] = xpehh['viterbi_class_xpehh']
 xpehh = xpehh.replace(state2numColor)
 xpehh = xpehh.replace(state2numPlot)
+# generate the viterbi path plots
 axs[1].axvline(x=2.5e6, color='black')
 axs[1].plot(xs, xpehh['viterbi_class_xpehh_plot'], color='lightgrey', alpha=0.5)
 axs[1].scatter(xs, xpehh['viterbi_class_xpehh_plot'], c=xpehh['viterbi_class_xpehh_color'],
-               cmap='cool', edgecolor='none', s=30, alpha=0.7)
+               cmap='cool', edgecolor='none', s=size, alpha=0.7)
 
-for i in range(100):
-    state2numColor = {f'sb_{i}_plot': {'neutral': 0, 'link_left': 1, 'link_right': 1, 'sweep': 2}}
-    state2numPlot = {f'sb_{i}_color': {'neutral': 0, 'link_left': 1, 'link_right': 2, 'sweep': 3}}
-    xpehh[f'sb_{i}_plot'] = xpehh[f'sb_{i}']
-    xpehh[f'sb_{i}_color'] = xpehh[f'sb_{i}']
-    xpehh = xpehh.replace(state2numColor)
-    xpehh = xpehh.replace(state2numPlot)
-    axs[2].axvline(x=2.5e6, color='black')
-    axs[2].plot(xs, xpehh[f'sb_{i}_plot'], color='lightgrey', alpha=0.1)
-    axs[2].scatter(xs, xpehh[f'sb_{i}_plot'], c=xpehh[f'sb_{i}_color'], cmap='cool', edgecolor='none', s=30, alpha=0.7)
+''' Stochastic Backtrace Paths'''
+# relabeling strings as numbers for plotting purposes (bringing outside the loop to accelerate run time)
+col_list = xpehh.columns
+sb_list = [i for i in col_list if 'sb_' in i]
+sb_color = xpehh[sb_list].replace(['neutral', 'link_left', 'link_right', 'sweep'],
+                                 [0, 1, 2, 3])
+sb_plot = xpehh[sb_list].replace(['neutral', 'link_left', 'link_right', 'sweep'],
+                                 [0, 1, 1, 3])
+# generate the stochastic backtrace plots
+for i in sb_list:
+    axs[2].plot(xs, sb_plot[i], color='lightgrey', alpha=0.1)
+    axs[2].scatter(xs, sb_plot[i], c=sb_color[i], cmap='cool', edgecolor='none', s=size, alpha=0.7)
+axs[2].axvline(x=2.5e6, color='black')
 
+''' SWIFr Plots '''
+# Not all classes are always identified with swifr, therefore, adjust the colorbar accordingly
 maxval = (len(sxpehh['label_pred'].unique()))/(len(sxpehh_classes))
+# truncate_colormap function found in stack exchange (link in function)
 new_cmap = truncate_colormap(plt.get_cmap('cool'), minval=0, maxval=maxval, n=100)
+# relabeling strings as numbers for plotting purposes
 state2numColor = {'label_pred_color': {'neutral': 0, 'link_left': 1, 'link_right': 2, 'sweep': 3}}
 state2numPlot = {'label_pred_plot': {'neutral': 0, 'link_left': 1, 'link_right': 1, 'sweep': 2}}
 sxpehh['label_pred_color'] = sxpehh['label_pred']
 sxpehh['label_pred_plot'] = sxpehh['label_pred']
 sxpehh = sxpehh.replace(state2numColor)
 sxpehh = sxpehh.replace(state2numPlot)
+# generate SWIFr plots
 axs[3].axvline(x=2.5e6, color='black')
 axs[3].plot(xs2, sxpehh['label_pred_plot'], color='lightgrey', alpha=0.5)
-axs[3].scatter(xs2, sxpehh['label_pred_plot'], c=sxpehh['label_pred_color'], cmap=new_cmap, edgecolor='none', s=30)
+axs[3].scatter(xs2, sxpehh['label_pred_plot'], c=sxpehh['label_pred_color'], cmap=new_cmap, edgecolor='none', s=size)
 
+''' Plot of Input Statistic'''
 axs[4].axvline(x=2.5e6, color='black')
 stats_plot = axs[4].scatter(xs, xpehh['xpehh'], c=xpehh['xpehh'], cmap='cool', s=3)
 
@@ -190,6 +207,7 @@ stats_plot = axs[4].scatter(xs, xpehh['xpehh'], c=xpehh['xpehh'], cmap='cool', s
 cax1 = inset_axes(axs[4], width="2%", height="100%", loc='right', borderpad=0)
 cbar4 = fig.colorbar(stats_plot, cax=cax1)
 
+''' Plot settings '''
 axis_labels = ['', 'Neutral', 'Link (left/right)','Sweep', '']
 axis_ticks = [-0.5, 0, 1, 2, 2.5]
 axs[0].set(ylabel='Actual State')
@@ -224,9 +242,10 @@ legend_elements = [Line2D([0], [0], marker='o', color='w', label='Neutral',
                    Line2D([0], [0], marker='_', color='black', label='Sweep Actual',
                           markersize=10)
                    ]
-
 axs[0].legend(handles=legend_elements, loc='upper left')
+# plt.savefig('plots_thesis/path_plot_4class_xpehh.svg')
 plt.show()
+
 
 
 
