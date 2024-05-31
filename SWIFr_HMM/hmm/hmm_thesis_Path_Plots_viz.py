@@ -31,50 +31,78 @@ path = 'C:/Users/scott/PycharmProjects/SWIFr_sdm/SWIFr_HMM/hmm/output_db/'
 conn = sqlite3.connect(path + 'hmm_predictions.db')
 # table names that contain the stochastic backtrace, viterbi, and gamms
 table_xpehh = f'sbt_prediction_xpehh_4class'
+table_ihs = f'sbt_prediction_ihs_afr_std_4class'
+table_fst = f'sbt_prediction_fst_4class'
 swfr_table_xpehh = 'swifr_pred_xpehh_4class'
 swfr_table_ihs = 'swifr_pred_ihs_4class'
 swfr_table_fst = 'swifr_pred_fst_4class'
 swfr_table_all = 'swifr_pred_allStats_4class'
+statistic = 'fst'  # xpehh, fst, ihs_afr_std
+sim_num = 19 # any number from 0 to 19
 
 sql_xpehh = (f"""
        SELECT *
         FROM {table_xpehh}
-        WHERE vcf_name IN ('ts_sweep_10.vcf')
+        WHERE vcf_name IN ('ts_sweep_{sim_num}.vcf')
+       """)
+
+sql_ihs = (f"""
+       SELECT *
+        FROM {table_ihs}
+        WHERE vcf_name IN ('ts_sweep_{sim_num}.vcf')
+       """)
+
+sql_fst = (f"""
+       SELECT *
+        FROM {table_fst}
+        WHERE vcf_name IN ('ts_sweep_{sim_num}.vcf')
        """)
 
 swfr_sql_xpehh = (f"""
        SELECT *
         FROM {swfr_table_xpehh}
-        WHERE vcf_name IN ('ts_sweep_10.vcf')
+        WHERE vcf_name IN ('ts_sweep_{sim_num}.vcf')
        """)
 
 swfr_sql_ihs = (f"""
        SELECT *
         FROM {swfr_table_ihs}
+        WHERE vcf_name IN ('ts_sweep_{sim_num}.vcf')
        """)
 
 swfr_sql_fst = (f"""
        SELECT *
         FROM {swfr_table_fst}
+        WHERE vcf_name IN ('ts_sweep_{sim_num}.vcf')
        """)
 
 swfr_sql_all = (f"""
        SELECT *
         FROM {swfr_table_all}
+        WHERE vcf_name IN ('ts_sweep_{sim_num}.vcf')
        """)
 
 # collect a list of the unique simulations
-xpehh = pd.read_sql(sql_xpehh, conn)
 
-# drop nans prior to analysis
-xpehh = xpehh[xpehh['xpehh'] != -998.0].reset_index(drop=True)
-xpehh_classes = list(xpehh['label'].unique())
+hmm_stat = pd.read_sql(sql_xpehh, conn)
+# allow for swapping between stats
+if statistic == 'xpehh':
+    hmm_stat = pd.read_sql(sql_xpehh, conn)
+elif statistic =='ihs_afr_std':
+    hmm_stat = pd.read_sql(sql_ihs, conn)
+elif statistic == 'fst':
+    hmm_stat = pd.read_sql(sql_fst, conn)
+
+# drop nans prior to analysis and define list of classes
+hmm_stat = hmm_stat[hmm_stat[statistic] != -998.0].reset_index(drop=True)
+actual_classes = list(hmm_stat['label'].unique())
 
 # swifr data
 sxpehh = pd.read_sql(swfr_sql_xpehh, conn)
 sihs = pd.read_sql(swfr_sql_ihs, conn)
 sfst = pd.read_sql(swfr_sql_fst, conn)
 sall = pd.read_sql(swfr_sql_all, conn)
+
 # drop null values
 sxpehh = sxpehh[sxpehh['xpehh'] != -998.0].reset_index(drop=True)
 sxpehh_classes = list(sxpehh['label'].unique())
@@ -82,6 +110,7 @@ sihs = sihs[sihs['ihs_afr_std'] != -998.0].reset_index(drop=True)
 sihs_classes = list(sihs['label'].unique())
 sfst = sfst[sfst['fst'] != -998.0].reset_index(drop=True)
 sfst_classes = list(sfst['label'].unique())
+
 # all swifer data
 sall = sall[(sall['fst'] != -998.0) |
             (sall['xpehh'] != -998.0) |
@@ -102,21 +131,32 @@ sall['label_pred'] = sall[swfr_cols].idxmax(axis=1)
 sall['label_pred'] = sall['label_pred'].replace(['P(neutral)', 'P(link_left)', 'P(link_right)', 'P(sweep)'],
                                       ['neutral', 'link_left', 'link_right', 'sweep'])
 
+# allow for swapping between stats
+if statistic == 'xpehh':
+    swifr_select = sxpehh
+    swifr_select_classes = sxpehh_classes
+elif statistic =='ihs_afr_std':
+    swifr_select = sihs
+    swifr_select_classes = sihs_classes
+elif statistic == 'fst':
+    swifr_select = sfst
+    swifr_select_classes = sfst_classes
+
 """ 
 ---------------------------------------------------------------------------------------------------
-XP-EHH Path Plot
+Path Plot
 ---------------------------------------------------------------------------------------------------
 """
 # size of markers for scatter plots
 size = 50
 # define x axes for brevity
-xs = xpehh['snp_position']
-xs2 = sxpehh['snp_position']
+xs = hmm_stat['snp_position']
+xs2 = swifr_select['snp_position']
 xs3 = sall['snp_position']
 # define colormap approved by addy
 cmap = mpl.colormaps['cool']
 # define legend
-legend_colors = cmap(np.linspace(0, 1, len(xpehh_classes)))
+legend_colors = cmap(np.linspace(0, 1, len(actual_classes)))
 # initialize the figure space
 fig = plt.figure(figsize=(18, 10))
 gs = fig.add_gridspec(6, hspace=0)
@@ -127,37 +167,37 @@ fig.suptitle('XP-EHH: Actual Path, Viterbi Path, Stochastic Backtrace, and XP-EH
 # relabeling strings as numbers for plotting purposes
 state2numColor = {'label_actual_color': {'neutral': 0, 'link_left': 1, 'link_right': 2, 'sweep': 3}}
 state2numPlot = {'label_actual_plot': {'neutral': 0, 'link_left': 1, 'link_right': 1, 'sweep': 2}}
-xpehh['label_actual_color'] = xpehh['label']
-xpehh['label_actual_plot'] = xpehh['label']
-xpehh = xpehh.replace(state2numColor)
-xpehh = xpehh.replace(state2numPlot)
+hmm_stat['label_actual_color'] = hmm_stat['label']
+hmm_stat['label_actual_plot'] = hmm_stat['label']
+hmm_stat = hmm_stat.replace(state2numColor)
+hmm_stat = hmm_stat.replace(state2numPlot)
 # generate the actual path plots
 axs[0].axvline(x=2.5e6, color='black')
-axs[0].plot(xs, xpehh['label_actual_plot'], color='lightgrey', alpha=0.5)
-axs[0].scatter(xs, xpehh['label_actual_plot'], c=xpehh['label_actual_color'],
+axs[0].plot(xs, hmm_stat['label_actual_plot'], color='lightgrey', alpha=0.5)
+axs[0].scatter(xs, hmm_stat['label_actual_plot'], c=hmm_stat['label_actual_color'],
                cmap='cool', edgecolor='none', s=size, alpha=0.7)
 
 ''' Viterbi Path '''
 # relabeling strings as numbers for plotting purposes
 state2numColor = {'viterbi_class_xpehh_color': {'neutral': 0, 'link_left': 1, 'link_right': 2, 'sweep': 3}}
 state2numPlot = {'viterbi_class_xpehh_plot': {'neutral': 0, 'link_left': 1, 'link_right': 1, 'sweep': 2}}
-xpehh['viterbi_class_xpehh_plot'] = xpehh['viterbi_class_xpehh']
-xpehh['viterbi_class_xpehh_color'] = xpehh['viterbi_class_xpehh']
-xpehh = xpehh.replace(state2numColor)
-xpehh = xpehh.replace(state2numPlot)
+hmm_stat['viterbi_class_xpehh_plot'] = hmm_stat['viterbi_class_xpehh']
+hmm_stat['viterbi_class_xpehh_color'] = hmm_stat['viterbi_class_xpehh']
+hmm_stat = hmm_stat.replace(state2numColor)
+hmm_stat = hmm_stat.replace(state2numPlot)
 # generate the viterbi path plots
 axs[1].axvline(x=2.5e6, color='black')
-axs[1].plot(xs, xpehh['viterbi_class_xpehh_plot'], color='lightgrey', alpha=0.5)
-axs[1].scatter(xs, xpehh['viterbi_class_xpehh_plot'], c=xpehh['viterbi_class_xpehh_color'],
+axs[1].plot(xs, hmm_stat['viterbi_class_xpehh_plot'], color='lightgrey', alpha=0.5)
+axs[1].scatter(xs, hmm_stat['viterbi_class_xpehh_plot'], c=hmm_stat['viterbi_class_xpehh_color'],
                cmap='cool', edgecolor='none', s=size, alpha=0.7)
 
 ''' Stochastic Backtrace Paths'''
 # relabeling strings as numbers for plotting purposes (bringing outside the loop to accelerate run time)
-col_list = xpehh.columns
+col_list = hmm_stat.columns
 sb_list = [i for i in col_list if 'sb_' in i]
-sb_color = xpehh[sb_list].replace(['neutral', 'link_left', 'link_right', 'sweep'],
+sb_color = hmm_stat[sb_list].replace(['neutral', 'link_left', 'link_right', 'sweep'],
                                  [0, 1, 2, 3])
-sb_plot = xpehh[sb_list].replace(['neutral', 'link_left', 'link_right', 'sweep'],
+sb_plot = hmm_stat[sb_list].replace(['neutral', 'link_left', 'link_right', 'sweep'],
                                  [0, 1, 1, 3])
 # generate the stochastic backtrace plots
 for i in sb_list:
@@ -167,20 +207,20 @@ axs[2].axvline(x=2.5e6, color='black')
 
 ''' SWIFr Plot One Stat '''
 # Not all classes are always identified with swifr, therefore, adjust the colorbar accordingly
-maxval = (len(sxpehh['label_pred'].unique()))/(len(sxpehh_classes))
+maxval = (len(swifr_select['label_pred'].unique()))/(len(swifr_select_classes))
 # truncate_colormap function found in stack exchange (link in function)
 new_cmap = truncate_colormap(plt.get_cmap('cool'), minval=0, maxval=maxval, n=100)
 # relabeling strings as numbers for plotting purposes
 state2numColor = {'label_pred_color': {'neutral': 0, 'link_left': 1, 'link_right': 2, 'sweep': 3}}
 state2numPlot = {'label_pred_plot': {'neutral': 0, 'link_left': 1, 'link_right': 1, 'sweep': 2}}
-sxpehh['label_pred_color'] = sxpehh['label_pred']
-sxpehh['label_pred_plot'] = sxpehh['label_pred']
-sxpehh = sxpehh.replace(state2numColor)
-sxpehh = sxpehh.replace(state2numPlot)
+swifr_select['label_pred_color'] = swifr_select['label_pred']
+swifr_select['label_pred_plot'] = swifr_select['label_pred']
+swifr_select = swifr_select.replace(state2numColor)
+swifr_select = swifr_select.replace(state2numPlot)
 # generate SWIFr plots
 axs[3].axvline(x=2.5e6, color='black')
-axs[3].plot(xs2, sxpehh['label_pred_plot'], color='lightgrey', alpha=0.5)
-axs[3].scatter(xs2, sxpehh['label_pred_plot'], c=sxpehh['label_pred_color'], cmap=new_cmap, edgecolor='none', s=size)
+axs[3].plot(xs2, swifr_select['label_pred_plot'], color='lightgrey', alpha=0.5)
+axs[3].scatter(xs2, swifr_select['label_pred_plot'], c=swifr_select['label_pred_color'], cmap=new_cmap, edgecolor='none', s=size)
 
 ''' SWIFr Plot All Stats '''
 # Not all classes are always identified with swifr, therefore, adjust the colorbar accordingly
@@ -201,7 +241,7 @@ axs[4].scatter(xs3, sall['label_pred_plot'], c=sall['label_pred_color'], cmap=ne
 
 ''' Plot of Input Statistic'''
 axs[5].axvline(x=2.5e6, color='black')
-stats_plot = axs[5].scatter(xs, xpehh['xpehh'], c=xpehh['xpehh'], cmap='cool', s=3)
+stats_plot = axs[5].scatter(xs, hmm_stat[statistic], c=hmm_stat[statistic], cmap='cool', s=3)
 
 # Add colorbars inside the stats plot (bottom plot)
 cax1 = inset_axes(axs[5], width="2%", height="100%", loc='right', borderpad=0)
