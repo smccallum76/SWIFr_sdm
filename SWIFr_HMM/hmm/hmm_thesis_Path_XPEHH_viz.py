@@ -112,13 +112,14 @@ size = 50
 # define x axes for brevity
 xs = xpehh['snp_position']
 xs2 = sxpehh['snp_position']
+xs3 = sall['snp_position']
 # define colormap approved by addy
 cmap = mpl.colormaps['cool']
 # define legend
 legend_colors = cmap(np.linspace(0, 1, len(xpehh_classes)))
 # initialize the figure space
-fig = plt.figure(figsize=(18, 8))
-gs = fig.add_gridspec(5, hspace=0)
+fig = plt.figure(figsize=(18, 10))
+gs = fig.add_gridspec(6, hspace=0)
 axs = gs.subplots(sharex=True, sharey=False)
 fig.suptitle('XP-EHH: Actual Path, Viterbi Path, Stochastic Backtrace, and XP-EHH Statistic')
 
@@ -164,7 +165,7 @@ for i in sb_list:
     axs[2].scatter(xs, sb_plot[i], c=sb_color[i], cmap='cool', edgecolor='none', s=size, alpha=0.7)
 axs[2].axvline(x=2.5e6, color='black')
 
-''' SWIFr Plots '''
+''' SWIFr Plot One Stat '''
 # Not all classes are always identified with swifr, therefore, adjust the colorbar accordingly
 maxval = (len(sxpehh['label_pred'].unique()))/(len(sxpehh_classes))
 # truncate_colormap function found in stack exchange (link in function)
@@ -181,13 +182,30 @@ axs[3].axvline(x=2.5e6, color='black')
 axs[3].plot(xs2, sxpehh['label_pred_plot'], color='lightgrey', alpha=0.5)
 axs[3].scatter(xs2, sxpehh['label_pred_plot'], c=sxpehh['label_pred_color'], cmap=new_cmap, edgecolor='none', s=size)
 
-''' Plot of Input Statistic'''
+''' SWIFr Plot All Stats '''
+# Not all classes are always identified with swifr, therefore, adjust the colorbar accordingly
+maxval = (len(sall['label_pred'].unique()))/(len(sxpehh_classes))
+# truncate_colormap function found in stack exchange (link in function)
+new_cmap = truncate_colormap(plt.get_cmap('cool'), minval=0, maxval=maxval, n=100)
+# relabeling strings as numbers for plotting purposes
+state2numColor = {'label_pred_color': {'neutral': 0, 'link_left': 1, 'link_right': 2, 'sweep': 3}}
+state2numPlot = {'label_pred_plot': {'neutral': 0, 'link_left': 1, 'link_right': 1, 'sweep': 2}}
+sall['label_pred_color'] = sall['label_pred']
+sall['label_pred_plot'] = sall['label_pred']
+sall = sall.replace(state2numColor)
+sall = sall.replace(state2numPlot)
+# generate SWIFr plots
 axs[4].axvline(x=2.5e6, color='black')
-stats_plot = axs[4].scatter(xs, xpehh['xpehh'], c=xpehh['xpehh'], cmap='cool', s=3)
+axs[4].plot(xs3, sall['label_pred_plot'], color='lightgrey', alpha=0.5)
+axs[4].scatter(xs3, sall['label_pred_plot'], c=sall['label_pred_color'], cmap=new_cmap, edgecolor='none', s=size)
+
+''' Plot of Input Statistic'''
+axs[5].axvline(x=2.5e6, color='black')
+stats_plot = axs[5].scatter(xs, xpehh['xpehh'], c=xpehh['xpehh'], cmap='cool', s=3)
 
 # Add colorbars inside the stats plot (bottom plot)
-cax1 = inset_axes(axs[4], width="2%", height="100%", loc='right', borderpad=0)
-cbar4 = fig.colorbar(stats_plot, cax=cax1)
+cax1 = inset_axes(axs[5], width="2%", height="100%", loc='right', borderpad=0)
+cbar5 = fig.colorbar(stats_plot, cax=cax1)
 
 ''' Plot settings '''
 axis_labels = ['', 'Neutral', 'Link (left/right)','Sweep', '']
@@ -204,11 +222,15 @@ axs[2].set(ylabel='BackTrc Pred')
 axs[2].yaxis.set_ticks(axis_ticks)
 axs[2].set_yticklabels(axis_labels)
 
-axs[3].set(ylabel='SWIFr Pred')
+axs[3].set(ylabel='SWIFr 1-Stat')
 axs[3].yaxis.set_ticks(axis_ticks)
 axs[3].set_yticklabels(axis_labels)
 
-axs[4].set(ylabel='Value XP-EHH')
+axs[4].set(ylabel='SWIFr All-Stats')
+axs[4].yaxis.set_ticks(axis_ticks)
+axs[4].set_yticklabels(axis_labels)
+
+axs[5].set(ylabel='Value XP-EHH')
 # Hide x labels and tick labels for all but bottom plot.
 for ax in axs:
     ax.label_outer()
