@@ -9,9 +9,17 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+import matplotlib.colors as matcolors
 from matplotlib.lines import Line2D
-from matplotlib.ticker import FixedLocator, FixedFormatter
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
+def truncate_colormap(cmap, minval=0.0, maxval=1.0, n=100):
+    # compliments of stack:
+    # https://stackoverflow.com/questions/18926031/how-to-extract-a-subset-of-a-colormap-as-a-new-colormap-in-matplotlib
+    new_cmap = matcolors.LinearSegmentedColormap.from_list(
+        f'{cmap.name}, {minval}, {maxval}',
+        cmap(np.linspace(minval, maxval, n)))
+    return new_cmap
 
 '''
 -----------------------------------------------------------------------------------------------------------------------
@@ -33,7 +41,7 @@ swfr_table_all = 'swifr_pred_allStats_4class'
 sql_xpehh = (f"""
        SELECT *
         FROM {table_xpehh}
-        WHERE vcf_name = 'ts_sweep_0.vcf'
+        WHERE vcf_name IN ('ts_sweep_10.vcf')
        """)
 
 sql_ihs = (f"""
@@ -49,7 +57,7 @@ sql_fst = (f"""
 swfr_sql_xpehh = (f"""
        SELECT *
         FROM {swfr_table_xpehh}
-        WHERE vcf_name = 'ts_sweep_1.vcf'
+        WHERE vcf_name IN ('ts_sweep_10.vcf')
        """)
 
 swfr_sql_ihs = (f"""
@@ -100,6 +108,8 @@ swfr_cols = ['P(neutral)', 'P(link_left)', 'P(link_right)', 'P(sweep)']
 sxpehh['label_pred'] = sxpehh[swfr_cols].idxmax(axis=1)
 sxpehh['label_pred'] = sxpehh['label_pred'].replace(['P(neutral)', 'P(link_left)', 'P(link_right)', 'P(sweep)'],
                                       ['neutral', 'link_left', 'link_right', 'sweep'])
+
+
 # sihs['label_pred'] = sihs[swfr_cols].idxmax(axis=1)
 # sihs['label_pred'] = sihs['label_pred'].replace(['P(neutral)', 'P(link_left)', 'P(link_right)', 'P(sweep)'],
 #                                       ['neutral', 'link_left', 'link_right', 'sweep'])
@@ -115,66 +125,107 @@ sxpehh['label_pred'] = sxpehh['label_pred'].replace(['P(neutral)', 'P(link_left)
 Plot -- Path and stat comparison [flashlight plot]
 ---------------------------------------------------------------------------------------------------
 """
-state2num = {'label_actual': {'neutral': 0, 'link_left': 1, 'link_right': 2, 'sweep': 3}}
-state2numPred = {'viterbi_class_xpehh_num': {'neutral': 0, 'link_left': 1, 'link_right': 2, 'sweep': 3}}
+# xs = np.arange(0, len(xpehh), 1)
+# xs2 = np.arange(0, len(sxpehh), 1)
 
-xpehh['label_actual'] = xpehh['label']
-xpehh['viterbi_class_xpehh_num'] = xpehh['viterbi_class_xpehh']
-xpehh = xpehh.replace(state2num)
-xpehh = xpehh.replace(state2numPred)
-
-xs = np.arange(0, len(xpehh), 1)
-xs2 = np.arange(0, len(sxpehh), 1)
+xs = xpehh['snp_position']
+xs2 = sxpehh['snp_position']
 cmap = mpl.colormaps['cool']
 legend_colors = cmap(np.linspace(0, 1, len(xpehh_classes)))
-colors = ['magenta', 'dodgerblue', 'darkviolet', 'blue']  # enough for four classes
 
 fig = plt.figure(figsize=(18, 8))
 gs = fig.add_gridspec(5, hspace=0)
 axs = gs.subplots(sharex=True, sharey=False)
 fig.suptitle(f'Actual Path, Predicted Path, and XP-EHH')
-# axs[0].plot(xs, xpehh['label'], color='black')
-axs[0].scatter(xs, [0]*len(xs), c=xpehh['label_actual'], cmap='cool', marker=",", s=10)
-axs[0].axvline(x=xpehh[xpehh['label']=='sweep'].index, color='black', label='Sweep Position')
-# axs[0].scatter(xs, xpehh['label'], c=colors, cmap='viridis', edgecolor='none', s=30)
-# axs[0].scatter(xs, xpehh['label'], s=30)
 
-# axs[1].plot(xs, xpehh['viterbi_class_xpehh'], color='black')
-axs[1].scatter(xs, [1]*len(xs), c=xpehh['viterbi_class_xpehh_num'], cmap='cool', marker=",", s=10)
-axs[1].axvline(x=xpehh[xpehh['label']=='sweep'].index, color='black', label='Sweep Position')
-# axs[1].scatter(xs, xpehh['viterbi_class_xpehh'], c=colors, cmap='viridis', edgecolor='none', s=30)
-# axs[1].scatter(xs, xpehh['viterbi_class_xpehh'],  s=30)
+state2numColor = {'label_actual_color': {'neutral': 0, 'link_left': 1, 'link_right': 2, 'sweep': 3}}
+state2numPlot = {'label_actual_plot': {'neutral': 0, 'link_left': 1, 'link_right': 1, 'sweep': 2}}
+xpehh['label_actual_color'] = xpehh['label']
+xpehh['label_actual_plot'] = xpehh['label']
+xpehh = xpehh.replace(state2numColor)
+xpehh = xpehh.replace(state2numPlot)
+axs[0].axvline(x=2.5e6, color='black')
+axs[0].plot(xs, xpehh['label_actual_plot'], color='lightgrey', alpha=0.5)
+axs[0].scatter(xs, xpehh['label_actual_plot'], c=xpehh['label_actual_color'],
+               cmap='cool', edgecolor='none', s=30, alpha=0.7)
+
+state2numColor = {'viterbi_class_xpehh_plot': {'neutral': 0, 'link_left': 1, 'link_right': 1, 'sweep': 2}}
+state2numPlot = {'viterbi_class_xpehh_color': {'neutral': 0, 'link_left': 1, 'link_right': 2, 'sweep': 3}}
+xpehh['viterbi_class_xpehh_plot'] = xpehh['viterbi_class_xpehh']
+xpehh['viterbi_class_xpehh_color'] = xpehh['viterbi_class_xpehh']
+xpehh = xpehh.replace(state2numColor)
+xpehh = xpehh.replace(state2numPlot)
+axs[1].axvline(x=2.5e6, color='black')
+axs[1].plot(xs, xpehh['viterbi_class_xpehh_plot'], color='lightgrey', alpha=0.5)
+axs[1].scatter(xs, xpehh['viterbi_class_xpehh_plot'], c=xpehh['viterbi_class_xpehh_color'],
+               cmap='cool', edgecolor='none', s=30, alpha=0.7)
+
 for i in range(100):
-    axs[2].plot(xs, xpehh.loc[:, f'sb_{i}'], color='lightgrey')
-# axs[2].scatter(xs, sb_paths, c=sb_paths,cmap='viridis', edgecolor='none', s=30)
+    state2numColor = {f'sb_{i}_plot': {'neutral': 0, 'link_left': 1, 'link_right': 1, 'sweep': 2}}
+    state2numPlot = {f'sb_{i}_color': {'neutral': 0, 'link_left': 1, 'link_right': 2, 'sweep': 3}}
+    xpehh[f'sb_{i}_plot'] = xpehh[f'sb_{i}']
+    xpehh[f'sb_{i}_color'] = xpehh[f'sb_{i}']
+    xpehh = xpehh.replace(state2numColor)
+    xpehh = xpehh.replace(state2numPlot)
+    axs[2].axvline(x=2.5e6, color='black')
+    axs[2].plot(xs, xpehh[f'sb_{i}_plot'], color='lightgrey', alpha=0.1)
+    axs[2].scatter(xs, xpehh[f'sb_{i}_plot'], c=xpehh[f'sb_{i}_color'], cmap='cool', edgecolor='none', s=30, alpha=0.7)
 
-axs[3].plot(xs2, sxpehh['label_pred'], color='black')
-# axs[3].scatter(xs2, sxpehh['label_pred'], c=colors, cmap='viridis', edgecolor='none', s=30)
-axs[3].scatter(xs2, sxpehh['label_pred'], s=30)
+maxval = (len(sxpehh['label_pred'].unique()))/(len(sxpehh_classes))
+new_cmap = truncate_colormap(plt.get_cmap('cool'), minval=0, maxval=maxval, n=100)
+state2numColor = {'label_pred_color': {'neutral': 0, 'link_left': 1, 'link_right': 2, 'sweep': 3}}
+state2numPlot = {'label_pred_plot': {'neutral': 0, 'link_left': 1, 'link_right': 1, 'sweep': 2}}
+sxpehh['label_pred_color'] = sxpehh['label_pred']
+sxpehh['label_pred_plot'] = sxpehh['label_pred']
+sxpehh = sxpehh.replace(state2numColor)
+sxpehh = sxpehh.replace(state2numPlot)
+axs[3].axvline(x=2.5e6, color='black')
+axs[3].plot(xs2, sxpehh['label_pred_plot'], color='lightgrey', alpha=0.5)
+axs[3].scatter(xs2, sxpehh['label_pred_plot'], c=sxpehh['label_pred_color'], cmap=new_cmap, edgecolor='none', s=30)
 
-# axs[4].scatter(xs, xpehh['xpehh'], c=xpehh['xpehh'], cmap='viridis', edgecolor='none', s=3)
-axs[4].scatter(xs, xpehh['xpehh'], c=xpehh['xpehh'], s=3)
+axs[4].axvline(x=2.5e6, color='black')
+stats_plot = axs[4].scatter(xs, xpehh['xpehh'], c=xpehh['xpehh'], cmap='cool', s=3)
 
+# Add colorbars inside the stats plot (bottom plot)
+cax1 = inset_axes(axs[4], width="2%", height="100%", loc='right', borderpad=0)
+cbar4 = fig.colorbar(stats_plot, cax=cax1)
+
+axis_labels = ['', 'Neutral', 'Link (left/right)','Sweep', '']
+axis_ticks = [-0.5, 0, 1, 2, 2.5]
 axs[0].set(ylabel='Actual State')
+axs[0].yaxis.set_ticks(axis_ticks)
+axs[0].set_yticklabels(axis_labels)
+
 axs[1].set(ylabel='Viterbi Pred')
+axs[1].yaxis.set_ticks(axis_ticks)
+axs[1].set_yticklabels(axis_labels)
+
 axs[2].set(ylabel='BackTrc Pred')
+axs[2].yaxis.set_ticks(axis_ticks)
+axs[2].set_yticklabels(axis_labels)
+
 axs[3].set(ylabel='SWIFr Pred')
+axs[3].yaxis.set_ticks(axis_ticks)
+axs[3].set_yticklabels(axis_labels)
+
 axs[4].set(ylabel='Value XP-EHH')
 # Hide x labels and tick labels for all but bottom plot.
 for ax in axs:
     ax.label_outer()
 
-legend_elements = [Line2D([0], [0], marker='o', color='w', label='0: Neutral',
+legend_elements = [Line2D([0], [0], marker='o', color='w', label='Neutral',
                           markerfacecolor=legend_colors[0], markersize=15),
-                   Line2D([0], [0], marker='o', color='w', label='1: Link_Left',
+                   Line2D([0], [0], marker='o', color='w', label='Link_Left',
                           markerfacecolor=legend_colors[1], markersize=15),
-                   Line2D([0], [0], marker='o', color='w', label='2: Link_Right',
+                   Line2D([0], [0], marker='o', color='w', label='Link_Right',
                           markerfacecolor=legend_colors[2], markersize=15),
-                   Line2D([0], [0], marker='o', color='w', label='3: Sweep',
-                          markerfacecolor=legend_colors[3], markersize=15)]
+                   Line2D([0], [0], marker='o', color='w', label='Sweep',
+                          markerfacecolor=legend_colors[3], markersize=15),
+                   Line2D([0], [0], marker='_', color='black', label='Sweep Actual',
+                          markersize=10)
+                   ]
 
 axs[0].legend(handles=legend_elements, loc='upper left')
-# axs[1].legend(handles=legend_elements, loc='upper left')
 plt.show()
 
 
