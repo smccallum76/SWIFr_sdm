@@ -26,64 +26,69 @@ def truncate_colormap(cmap, minval=0.0, maxval=1.0, n=100):
 Extract data from the SQLite DB for visualizations 
 -----------------------------------------------------------------------------------------------------------------------
 '''
+save_fig = 'yes'
+sim_num = 18 # any number from 0 to 19
+plot_save = 'path_plot_xpehh_4class_allSims.png'
+# plot_save = f'path_plot_ihs_4class_sim{sim_num}.png'
+statistic = 'xpehh'  # xpehh, fst, ihs_afr_std
+plot_title = 'XP-EHH'
+
+# WHERE vcf_name IN ('ts_sweep_{sim_num}.vcf')
 
 path = 'C:/Users/scott/PycharmProjects/SWIFr_sdm/SWIFr_HMM/hmm/output_db/'
 conn = sqlite3.connect(path + 'hmm_predictions.db')
-# table names that contain the stochastic backtrace, viterbi, and gamms
-table_xpehh = f'sbt_prediction_xpehh_4class'
-table_ihs = f'sbt_prediction_ihs_afr_std_4class'
-table_fst = f'sbt_prediction_fst_4class'
+# table names that contain the stochastic backtrace, viterbi, and gamma
+table_xpehh = 'sbt_prediction_xpehh_4class'
+table_ihs = 'sbt_prediction_ihs_afr_std_4class'
+table_fst = 'sbt_prediction_fst_4class'
 swfr_table_xpehh = 'swifr_pred_xpehh_4class'
 swfr_table_ihs = 'swifr_pred_ihs_4class'
 swfr_table_fst = 'swifr_pred_fst_4class'
 swfr_table_all = 'swifr_pred_allStats_4class'
-statistic = 'fst'  # xpehh, fst, ihs_afr_std
-sim_num = 19 # any number from 0 to 19
 
 sql_xpehh = (f"""
        SELECT *
         FROM {table_xpehh}
-        WHERE vcf_name IN ('ts_sweep_{sim_num}.vcf')
+        --WHERE vcf_name IN ('ts_sweep_{sim_num}.vcf')
        """)
 
 sql_ihs = (f"""
        SELECT *
         FROM {table_ihs}
-        WHERE vcf_name IN ('ts_sweep_{sim_num}.vcf')
+        --WHERE vcf_name IN ('ts_sweep_{sim_num}.vcf')
        """)
 
 sql_fst = (f"""
        SELECT *
         FROM {table_fst}
-        WHERE vcf_name IN ('ts_sweep_{sim_num}.vcf')
+        --WHERE vcf_name IN ('ts_sweep_{sim_num}.vcf')
        """)
 
 swfr_sql_xpehh = (f"""
        SELECT *
         FROM {swfr_table_xpehh}
-        WHERE vcf_name IN ('ts_sweep_{sim_num}.vcf')
+        --WHERE vcf_name IN ('ts_sweep_{sim_num}.vcf')
        """)
 
 swfr_sql_ihs = (f"""
        SELECT *
         FROM {swfr_table_ihs}
-        WHERE vcf_name IN ('ts_sweep_{sim_num}.vcf')
+        --WHERE vcf_name IN ('ts_sweep_{sim_num}.vcf')
        """)
 
 swfr_sql_fst = (f"""
        SELECT *
         FROM {swfr_table_fst}
-        WHERE vcf_name IN ('ts_sweep_{sim_num}.vcf')
+        --WHERE vcf_name IN ('ts_sweep_{sim_num}.vcf')
        """)
 
 swfr_sql_all = (f"""
        SELECT *
         FROM {swfr_table_all}
-        WHERE vcf_name IN ('ts_sweep_{sim_num}.vcf')
+        --WHERE vcf_name IN ('ts_sweep_{sim_num}.vcf')
        """)
 
 # collect a list of the unique simulations
-
 hmm_stat = pd.read_sql(sql_xpehh, conn)
 # allow for swapping between stats
 if statistic == 'xpehh':
@@ -158,10 +163,10 @@ cmap = mpl.colormaps['cool']
 # define legend
 legend_colors = cmap(np.linspace(0, 1, len(actual_classes)))
 # initialize the figure space
-fig = plt.figure(figsize=(18, 10))
+fig = plt.figure(figsize=(20, 10))
 gs = fig.add_gridspec(6, hspace=0)
 axs = gs.subplots(sharex=True, sharey=False)
-fig.suptitle('XP-EHH: Actual Path, Viterbi Path, Stochastic Backtrace, and XP-EHH Statistic')
+fig.suptitle(f'{plot_title}: Actual Path, Viterbi Path, Stochastic Backtrace, SWIF(r) Plots, and {plot_title} Statistic')
 
 ''' Actual Path '''
 # relabeling strings as numbers for plotting purposes
@@ -270,7 +275,7 @@ axs[4].set(ylabel='SWIFr All-Stats')
 axs[4].yaxis.set_ticks(axis_ticks)
 axs[4].set_yticklabels(axis_labels)
 
-axs[5].set(ylabel='Value XP-EHH')
+axs[5].set(ylabel=f'Value {plot_title}')
 # Hide x labels and tick labels for all but bottom plot.
 for ax in axs:
     ax.label_outer()
@@ -287,8 +292,10 @@ legend_elements = [Line2D([0], [0], marker='o', color='w', label='Neutral',
                           markersize=10)
                    ]
 axs[0].legend(handles=legend_elements, loc='upper left')
-# plt.savefig('plots_thesis/path_plot_4class_xpehh.svg')
-plt.show()
+if save_fig == 'yes':
+    plt.savefig(f'plots_thesis/{plot_save}')
+else:
+    plt.show()
 
 
 
