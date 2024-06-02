@@ -11,15 +11,17 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix,  ConfusionMatrixDisplay
 from sklearn.preprocessing import LabelBinarizer
 from sklearn.metrics import roc_curve, roc_auc_score
+from sklearn.metrics import accuracy_score,  classification_report
+from imblearn.metrics import specificity_score
 
 '''
 -----------------------------------------------------------------------------------------------------------------------
 Extract data from the SQLite DB for visualizations 
 -----------------------------------------------------------------------------------------------------------------------
 '''
-states = 2  # change from 2, 3, or 4 states
-do_cm = 'yes'
-do_roc = 'yes'
+states = 3  # change from 2, 3, or 4 states
+do_cm = 'no'
+do_roc = 'no'
 
 path = 'C:/Users/scott/PycharmProjects/SWIFr_sdm/SWIFr_HMM/hmm/output_db/'
 conn = sqlite3.connect(path + 'hmm_predictions.db')
@@ -56,6 +58,12 @@ ihs = ihs[ihs['ihs_afr_std'] != -998.0].reset_index(drop=True)
 ihs_classes = list(ihs['label'].unique())
 fst = fst[fst['fst'] != -998.0].reset_index(drop=True)
 fst_classes = list(fst['label'].unique())
+
+print('done')
+# accuracy_score, precision_score, recall_score, f1_score
+# fst_report = classification_report(fst['label'], fst['viterbi_class_fst'])
+# fst_spec = specificity_score(fst['label'], fst['viterbi_class_fst'], average=None, labels=fst_classes)
+# fst_acc = accuracy_score(fst['label'], fst['viterbi_class_fst'])
 
 """
 ---------------------------------------------------------------------------------------------------
