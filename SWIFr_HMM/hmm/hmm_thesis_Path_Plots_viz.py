@@ -28,10 +28,10 @@ Extract data from the SQLite DB for visualizations
 '''
 save_fig = 'yes'
 sim_num = 18 # any number from 0 to 19
-plot_save = 'path_plot_xpehh_4class_allSims.png'
-# plot_save = f'path_plot_ihs_4class_sim{sim_num}.png'
+# plot_save = 'path_plot_xpehh_4class_allSims.png'
 statistic = 'xpehh'  # xpehh, fst, ihs_afr_std
 plot_title = 'XP-EHH'
+plot_save = f'path_plot_{plot_title}_4class_sim{sim_num}.png'
 
 # WHERE vcf_name IN ('ts_sweep_{sim_num}.vcf')
 
@@ -49,43 +49,43 @@ swfr_table_all = 'swifr_pred_allStats_4class'
 sql_xpehh = (f"""
        SELECT *
         FROM {table_xpehh}
-        --WHERE vcf_name IN ('ts_sweep_{sim_num}.vcf')
+        WHERE vcf_name IN ('ts_sweep_{sim_num}.vcf')
        """)
 
 sql_ihs = (f"""
        SELECT *
         FROM {table_ihs}
-        --WHERE vcf_name IN ('ts_sweep_{sim_num}.vcf')
+        WHERE vcf_name IN ('ts_sweep_{sim_num}.vcf')
        """)
 
 sql_fst = (f"""
        SELECT *
         FROM {table_fst}
-        --WHERE vcf_name IN ('ts_sweep_{sim_num}.vcf')
+        WHERE vcf_name IN ('ts_sweep_{sim_num}.vcf')
        """)
 
 swfr_sql_xpehh = (f"""
        SELECT *
         FROM {swfr_table_xpehh}
-        --WHERE vcf_name IN ('ts_sweep_{sim_num}.vcf')
+        WHERE vcf_name IN ('ts_sweep_{sim_num}.vcf')
        """)
 
 swfr_sql_ihs = (f"""
        SELECT *
         FROM {swfr_table_ihs}
-        --WHERE vcf_name IN ('ts_sweep_{sim_num}.vcf')
+        WHERE vcf_name IN ('ts_sweep_{sim_num}.vcf')
        """)
 
 swfr_sql_fst = (f"""
        SELECT *
         FROM {swfr_table_fst}
-        --WHERE vcf_name IN ('ts_sweep_{sim_num}.vcf')
+        WHERE vcf_name IN ('ts_sweep_{sim_num}.vcf')
        """)
 
 swfr_sql_all = (f"""
        SELECT *
         FROM {swfr_table_all}
-        --WHERE vcf_name IN ('ts_sweep_{sim_num}.vcf')
+        WHERE vcf_name IN ('ts_sweep_{sim_num}.vcf')
        """)
 
 # collect a list of the unique simulations
@@ -154,6 +154,8 @@ Path Plot
 """
 # size of markers for scatter plots
 size = 50
+alpha_point = 0.5
+alpha_line = 0.7
 # define x axes for brevity
 xs = hmm_stat['snp_position']
 xs2 = swifr_select['snp_position']
@@ -178,23 +180,23 @@ hmm_stat = hmm_stat.replace(state2numColor)
 hmm_stat = hmm_stat.replace(state2numPlot)
 # generate the actual path plots
 axs[0].axvline(x=2.5e6, color='black')
-axs[0].plot(xs, hmm_stat['label_actual_plot'], color='lightgrey', alpha=0.5)
+axs[0].plot(xs, hmm_stat['label_actual_plot'], color='lightgrey', alpha=alpha_line)
 axs[0].scatter(xs, hmm_stat['label_actual_plot'], c=hmm_stat['label_actual_color'],
-               cmap='cool', edgecolor='none', s=size, alpha=0.7)
+               cmap='cool', edgecolor='none', s=size, alpha=alpha_point)
 
 ''' Viterbi Path '''
 # relabeling strings as numbers for plotting purposes
-state2numColor = {'viterbi_class_xpehh_color': {'neutral': 0, 'link_left': 1, 'link_right': 2, 'sweep': 3}}
-state2numPlot = {'viterbi_class_xpehh_plot': {'neutral': 0, 'link_left': 1, 'link_right': 1, 'sweep': 2}}
-hmm_stat['viterbi_class_xpehh_plot'] = hmm_stat['viterbi_class_xpehh']
-hmm_stat['viterbi_class_xpehh_color'] = hmm_stat['viterbi_class_xpehh']
+state2numColor = {f'viterbi_class_{statistic}_color': {'neutral': 0, 'link_left': 1, 'link_right': 2, 'sweep': 3}}
+state2numPlot = {f'viterbi_class_{statistic}_plot': {'neutral': 0, 'link_left': 1, 'link_right': 1, 'sweep': 2}}
+hmm_stat[f'viterbi_class_{statistic}_plot'] = hmm_stat[f'viterbi_class_{statistic}']
+hmm_stat[f'viterbi_class_{statistic}_color'] = hmm_stat[f'viterbi_class_{statistic}']
 hmm_stat = hmm_stat.replace(state2numColor)
 hmm_stat = hmm_stat.replace(state2numPlot)
 # generate the viterbi path plots
 axs[1].axvline(x=2.5e6, color='black')
-axs[1].plot(xs, hmm_stat['viterbi_class_xpehh_plot'], color='lightgrey', alpha=0.5)
-axs[1].scatter(xs, hmm_stat['viterbi_class_xpehh_plot'], c=hmm_stat['viterbi_class_xpehh_color'],
-               cmap='cool', edgecolor='none', s=size, alpha=0.7)
+axs[1].plot(xs, hmm_stat[f'viterbi_class_{statistic}_plot'], color='lightgrey', alpha=alpha_line)
+axs[1].scatter(xs, hmm_stat[f'viterbi_class_{statistic}_plot'], c=hmm_stat[f'viterbi_class_{statistic}_color'],
+               cmap='cool', edgecolor='none', s=size, alpha=alpha_point)
 
 ''' Stochastic Backtrace Paths'''
 # relabeling strings as numbers for plotting purposes (bringing outside the loop to accelerate run time)
@@ -206,8 +208,8 @@ sb_plot = hmm_stat[sb_list].replace(['neutral', 'link_left', 'link_right', 'swee
                                  [0, 1, 1, 3])
 # generate the stochastic backtrace plots
 for i in sb_list:
-    axs[2].plot(xs, sb_plot[i], color='lightgrey', alpha=0.1)
-    axs[2].scatter(xs, sb_plot[i], c=sb_color[i], cmap='cool', edgecolor='none', s=size, alpha=0.7)
+    axs[2].plot(xs, sb_plot[i], color='lightgrey', alpha=alpha_line)
+    axs[2].scatter(xs, sb_plot[i], c=sb_color[i], cmap='cool', edgecolor='none', s=size, alpha=alpha_point)
 axs[2].axvline(x=2.5e6, color='black')
 
 ''' SWIFr Plot One Stat '''
@@ -224,8 +226,9 @@ swifr_select = swifr_select.replace(state2numColor)
 swifr_select = swifr_select.replace(state2numPlot)
 # generate SWIFr plots
 axs[3].axvline(x=2.5e6, color='black')
-axs[3].plot(xs2, swifr_select['label_pred_plot'], color='lightgrey', alpha=0.5)
-axs[3].scatter(xs2, swifr_select['label_pred_plot'], c=swifr_select['label_pred_color'], cmap=new_cmap, edgecolor='none', s=size)
+axs[3].plot(xs2, swifr_select['label_pred_plot'], color='lightgrey', alpha=alpha_line)
+axs[3].scatter(xs2, swifr_select['label_pred_plot'], c=swifr_select['label_pred_color'], cmap=new_cmap,
+               edgecolor='none', s=size, alpha=alpha_point)
 
 ''' SWIFr Plot All Stats '''
 # Not all classes are always identified with swifr, therefore, adjust the colorbar accordingly
@@ -241,8 +244,9 @@ sall = sall.replace(state2numColor)
 sall = sall.replace(state2numPlot)
 # generate SWIFr plots
 axs[4].axvline(x=2.5e6, color='black')
-axs[4].plot(xs3, sall['label_pred_plot'], color='lightgrey', alpha=0.5)
-axs[4].scatter(xs3, sall['label_pred_plot'], c=sall['label_pred_color'], cmap=new_cmap, edgecolor='none', s=size)
+axs[4].plot(xs3, sall['label_pred_plot'], color='lightgrey', alpha=alpha_line)
+axs[4].scatter(xs3, sall['label_pred_plot'], c=sall['label_pred_color'], cmap=new_cmap, edgecolor='none', s=size,
+               alpha=alpha_point)
 
 ''' Plot of Input Statistic'''
 axs[5].axvline(x=2.5e6, color='black')
@@ -275,7 +279,7 @@ axs[4].set(ylabel='SWIFr All-Stats')
 axs[4].yaxis.set_ticks(axis_ticks)
 axs[4].set_yticklabels(axis_labels)
 
-axs[5].set(ylabel=f'Value {plot_title}')
+axs[5].set(ylabel=f'Value {plot_title}', xlabel='Genomic Position [SNP]')
 # Hide x labels and tick labels for all but bottom plot.
 for ax in axs:
     ax.label_outer()
